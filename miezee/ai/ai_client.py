@@ -7,8 +7,8 @@ from miezee.services.settings_service import SettingsService
 
 
 OFFLINE_MESSAGE = (
-    "Modo sin conexion. El analizador semantico continua disponible, "
-    "pero las explicaciones con inteligencia artificial estan desactivadas"
+    "Modelo local no disponible. El analizador semantico continua disponible, "
+    "pero el chat de IA para Miezee, programacion general e investigacion esta desactivado"
 )
 
 
@@ -18,7 +18,7 @@ class AIClient:
         self.available = self.settings.ai_provider == "ollama" and bool(self.settings.ollama_model)
 
     def status(self) -> str:
-        return "Local" if self.available else "Sin conexion"
+        return "Ejecutando localmente" if self.available else "Local no disponible"
 
     def ask(self, message: str) -> str:
         if not self.available:

@@ -10,9 +10,11 @@ from miezee.core.ast_nodes import (
     EndFunctionStatement,
     ElseStatement,
     ForStatement,
+    FunctionCall,
     FunctionStatement,
     Identifier,
     IfStatement,
+    InputStatement,
     Literal,
     ParameterStatement,
     ParseIssue,
@@ -125,6 +127,15 @@ class ExpressionParser:
                 return Literal(self.line, token.value, DataType.DECIMAL)
             if token.value.isdigit():
                 return Literal(self.line, token.value, DataType.ENTERO)
+            if self._match("("):
+                arguments = []
+                if not self._match(")"):
+                    while True:
+                        arguments.append(self._parse_or())
+                        if self._match(")"):
+                            break
+                        self._consume(",", "Falta separar argumentos con coma.")
+                return FunctionCall(self.line, token.value, arguments)
             return Identifier(self.line, token.value)
         raise ValueError("Expresion incompleta.")
 
@@ -218,7 +229,9 @@ class Parser:
             if len(tokens) == 2 and tokens[1].upper == "FUNCION":
                 return EndFunctionStatement(line, raw)
             raise ValueError("FIN invalido. Usa: FIN FUNCION.")
-        raise ValueError("La instruccion debe iniciar con DEFINIR, CAMBIAR, MOSTRAR, CREAR, AGREGAR, IF, FOR, WHILE, SWITCH o FUNCION.")
+        if head == "PEDIR":
+            return self._parse_input(tokens, line, raw)
+        raise ValueError("La instruccion debe iniciar con DEFINIR, CAMBIAR, MOSTRAR, CREAR, AGREGAR, IF, FOR, WHILE, SWITCH, FUNCION o PEDIR.")
 
     def _parse_define(self, tokens: list[Token], line: int, raw: str):
         if len(tokens) < 6 or tokens[2].upper != "COMO":
@@ -294,6 +307,22 @@ class Parser:
         if type_name not in TYPE_NAMES:
             raise ValueError("Tipo de parametro no reconocido.")
         return ParameterStatement(line, raw, tokens[1].value, TYPE_NAMES[type_name])
+
+    def _parse_input(self, tokens: list[Token], line: int, raw: str):
+        if len(tokens) < 4 or tokens[2].upper != "COMO":
+            raise ValueError('Entrada invalida. Usa: PEDIR nombre COMO TIPO CON MENSAJE "Texto".')
+        name = tokens[1].value
+        type_name = tokens[3].upper
+        if type_name not in TYPE_NAMES:
+            raise ValueError("Tipo de entrada no reconocido.")
+        message = f"Ingrese {name}:"
+        if len(tokens) == 7:
+            if tokens[4].upper != "CON" or tokens[5].upper != "MENSAJE" or not self._is_string(tokens[6]):
+                raise ValueError('Entrada invalida. Usa: PEDIR nombre COMO TIPO CON MENSAJE "Texto".')
+            message = self._unquote(tokens[6].value)
+        elif len(tokens) != 4:
+            raise ValueError('Entrada invalida. Usa: PEDIR nombre COMO TIPO CON MENSAJE "Texto".')
+        return InputStatement(line, raw, name, TYPE_NAMES[type_name], message)
 
     def _parse_expr(self, tokens: list[Token], line: int):
         if not tokens:

@@ -16,12 +16,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from miezee.ai.ai_client import AIClient
+from miezee.core.function_executor import FunctionExecutor
+from miezee.core.program_executor import ProgramSession
 from miezee.core.semantic_analyzer import SemanticAnalyzer, AnalysisResult
 from miezee.core.ui_model import UIScreen
 from miezee.services.file_service import FileService
 from miezee.ui.chat_panel import ChatPanel
 from miezee.ui.code_editor import CodeEditor
 from miezee.ui.command_palette import CommandPalette
+from miezee.ui.console_panel import ConsolePanel
 from miezee.ui.dark_theme import APP_STYLE
 from miezee.ui.explorer_panel import ExplorerPanel
 from miezee.ui.problems_panel import ProblemsPanel
@@ -36,6 +40,7 @@ class MainWindow(QMainWindow):
         self.analyzer = SemanticAnalyzer()
         self.last_result: AnalysisResult | None = None
         self.current_path: Path | None = None
+        self.program_session: ProgramSession | None = None
         self.setWindowTitle("Miezee IDE")
         self.resize(1360, 820)
         self._build_ui()
@@ -50,11 +55,14 @@ class MainWindow(QMainWindow):
         self.problems = ProblemsPanel()
         self.result_output = QPlainTextEdit()
         self.result_output.setReadOnly(True)
+        self.console_output = ConsolePanel()
+        self.console_output.command_submitted.connect(self.execute_console_command)
         self.symbols = SymbolTablePanel()
         self.preview = PreviewPanel()
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.problems, "Problemas")
         self.bottom_tabs.addTab(self.result_output, "Resultado")
+        self.bottom_tabs.addTab(self.console_output, "Consola")
         self.bottom_tabs.addTab(self.symbols, "Tabla de simbolos")
         self.bottom_tabs.addTab(self.preview, "Vista previa")
         center = QSplitter(Qt.Vertical)
@@ -74,7 +82,7 @@ class MainWindow(QMainWindow):
         self.status_pos = QLabel("Linea 1, Columna 1")
         self.status_errors = QLabel("Errores: 0")
         self.status_analyzer = QLabel("Analizador: listo")
-        self.status_ai = QLabel("IA: Sin conexion")
+        self.status_ai = QLabel(f"IA: {AIClient().status()}")
         self.statusBar().addWidget(self.status_file)
         self.statusBar().addWidget(self.status_pos)
         self.statusBar().addWidget(self.status_errors)
@@ -93,6 +101,8 @@ class MainWindow(QMainWindow):
             ("Guardar", "Ctrl+S", self.save_file),
             ("Guardar como", "Ctrl+Shift+S", self.save_file_as),
             ("Analizar", "F5", self.analyze_program),
+            ("Ejecutar", "F6", self.run_program),
+            ("Consola", "F8", self.show_console),
             ("Vista previa", "F7", self.show_preview),
             ("Limpiar", "Ctrl+L", self.clear_results),
             ("Configuracion", "", self.show_settings),
@@ -109,8 +119,8 @@ class MainWindow(QMainWindow):
         self._shortcut("Ctrl+B", lambda: self.explorer.setVisible(not self.explorer.isVisible()))
         self._shortcut("Ctrl+J", lambda: self.bottom_tabs.setVisible(not self.bottom_tabs.isVisible()))
         self.palette = CommandPalette([
-            "Nuevo archivo", "Abrir archivo", "Guardar archivo", "Analizar programa",
-            "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Generar ejemplo", "Limpiar resultados",
+            "Nuevo archivo", "Abrir archivo", "Guardar archivo", "Analizar programa", "Ejecutar programa",
+            "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
             "Mostrar u ocultar chat", "Mostrar u ocultar explorador", "Cambiar tamano de fuente",
         ], self)
         self.palette.command_selected.connect(self.execute_palette_command)
@@ -184,6 +194,7 @@ class MainWindow(QMainWindow):
         self.status_errors.setText(f"Errores: {len(self.last_result.errors)}")
         self.status_analyzer.setText("Analizador: correcto" if self.last_result.ok else "Analizador: con errores")
         self.result_output.setPlainText(self._result_text(self.last_result))
+        self.console_output.set_text(self._console_text(self.last_result))
         if self.last_result.errors:
             self.bottom_tabs.setCurrentWidget(self.problems)
         elif self.last_result.ui_screen.exists and self.last_result.ui_screen.visible:
@@ -195,6 +206,21 @@ class MainWindow(QMainWindow):
         self.bottom_tabs.setVisible(True)
         self.bottom_tabs.setCurrentWidget(self.preview)
 
+    def show_console(self) -> None:
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.console_output)
+
+    def run_program(self) -> None:
+        self.analyze_program()
+        self.show_console()
+        if self.last_result and self.last_result.errors:
+            self.console_output.append_output("No se puede ejecutar: corrige los errores semanticos primero.")
+            return
+        self.program_session = ProgramSession(self.current_text())
+        self.console_output.append_output(self.program_session.start())
+        if not self.program_session.waiting_input:
+            self.program_session = None
+
     def _result_text(self, result: AnalysisResult) -> str:
         lines = ["Entrada:", result.source, "", "Estado final:", "Correcto" if result.ok else "Con errores", "", "Reglas aplicadas:"]
         lines.extend(result.rules_applied or ["Sin reglas aplicadas"])
@@ -203,8 +229,39 @@ class MainWindow(QMainWindow):
             lines.extend(f"{err.code} linea {err.line}: {err.explanation}" for err in result.errors)
         return "\n".join(lines)
 
+    def _console_text(self, result: AnalysisResult) -> str:
+        lines = [
+            "Miezee Console",
+            "==============",
+            f"Estado: {'correcto' if result.ok else 'con errores'}",
+            f"Errores: {len(result.errors)}",
+        ]
+        if result.rules_applied:
+            lines.append("Reglas aplicadas: " + ", ".join(result.rules_applied))
+        function_symbols = [symbol for symbol in result.symbol_table.all() if symbol.initial_value == "funcion"]
+        parameter_symbols = [symbol for symbol in result.symbol_table.all() if symbol.initial_value.startswith("parametro de ")]
+        if function_symbols:
+            lines.append("")
+            lines.append("Funciones detectadas:")
+            for symbol in function_symbols:
+                lines.append(f"- {symbol.name} retorna {symbol.data_type.value} (linea {symbol.declared_line})")
+                params = [param for param in parameter_symbols if param.initial_value == f"parametro de {symbol.name}"]
+                for param in params:
+                    lines.append(f"  parametro {param.name}: {param.data_type.value}")
+        return_lines = [line.strip() for line in result.source.splitlines() if line.strip().upper().startswith("RETORNAR ")]
+        if return_lines:
+            lines.append("")
+            lines.append("Retornos encontrados:")
+            lines.extend(f"- {line}" for line in return_lines)
+        if result.errors:
+            lines.append("")
+            lines.append("Errores:")
+            lines.extend(f"- {err.code} linea {err.line}: {err.explanation}" for err in result.errors)
+        return "\n".join(lines)
+
     def clear_results(self) -> None:
         self.last_result = None
+        self.console_output.clear()
         self.result_output.clear()
         self.problems.set_errors([])
         self.symbols.set_symbols([])
@@ -236,16 +293,34 @@ class MainWindow(QMainWindow):
             "Abrir archivo": self.open_file,
             "Guardar archivo": self.save_file,
             "Analizar programa": self.analyze_program,
+            "Ejecutar programa": self.run_program,
+            "Mostrar consola": self.show_console,
             "Mostrar vista previa": self.show_preview,
             "Mostrar tabla de simbolos": lambda: self.bottom_tabs.setCurrentWidget(self.symbols),
             "Explicar errores con IA": self.chat.explain_selected_error,
-            "Generar ejemplo": lambda: self.chat.ask_ai("Genera un ejemplo valido de Miezee."),
             "Limpiar resultados": self.clear_results,
             "Mostrar u ocultar chat": lambda: self.chat.setVisible(not self.chat.isVisible()),
             "Mostrar u ocultar explorador": lambda: self.explorer.setVisible(not self.explorer.isVisible()),
             "Cambiar tamano de fuente": self.change_font_size,
         }
         mapping[command]()
+
+    def execute_console_command(self, command: str) -> None:
+        if self.program_session and self.program_session.waiting_input:
+            self.console_output.append_output(self.program_session.submit(command))
+            if not self.program_session.waiting_input:
+                self.program_session = None
+            return
+        if command.strip().lower() in {"ejecutar", "run"}:
+            self.run_program()
+            return
+        if not self.last_result:
+            self.analyze_program()
+        if self.last_result and self.last_result.errors:
+            self.console_output.append_output("No se puede ejecutar: corrige los errores semanticos primero.")
+            return
+        result = FunctionExecutor(self.current_text()).execute_command(command)
+        self.console_output.append_output(result)
 
     def change_font_size(self) -> None:
         size, ok = QInputDialog.getInt(self, "Tamano de fuente", "Tamano:", self.current_editor().font().pointSize(), 8, 28)

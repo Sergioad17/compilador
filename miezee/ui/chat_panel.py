@@ -2,9 +2,10 @@ import html
 import re
 
 from PySide6.QtCore import QThreadPool, Signal
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QTextEdit, QVBoxLayout, QWidget
 
-from miezee.ai.ai_client import OFFLINE_MESSAGE
+from miezee.ai.ai_client import AIClient, OFFLINE_MESSAGE
 from miezee.ai.ai_worker import AIWorker
 from miezee.ai.chat_commands import CHAT_COMMANDS, ChatCommandHandler
 from miezee.core.semantic_analyzer import SemanticAnalyzer
@@ -23,11 +24,20 @@ class ChatPanel(QWidget):
         self.current_worker: AIWorker | None = None
         self.current_request = "chat"
         self.pending_original_code = ""
+        self.pending_generation_request = ""
+        self.generation_retry_count = 0
 
         layout = QVBoxLayout(self)
-        self.status = QLabel("Sin conexion")
+        self.status = QLabel(AIClient().status())
         self.history = QTextEdit()
         self.history.setReadOnly(True)
+        self.history.setStyleSheet(
+            "QTextEdit {"
+            "background: #1e1e1e;"
+            "border: 1px solid #333333;"
+            "padding: 8px;"
+            "}"
+        )
         self.input = QLineEdit()
         self.input.setPlaceholderText("Escribe un mensaje o /ayuda...")
         self.command_list = QListWidget()
@@ -45,10 +55,8 @@ class ChatPanel(QWidget):
         action_row = QHBoxLayout()
         self.explain_error_button = QPushButton("Explicar error seleccionado")
         self.fix_button = QPushButton("Corregir instruccion")
-        self.example_button = QPushButton("Generar ejemplo")
         action_row.addWidget(self.explain_error_button)
         action_row.addWidget(self.fix_button)
-        action_row.addWidget(self.example_button)
 
         layout.addWidget(self.status)
         layout.addWidget(self.history)
@@ -65,7 +73,6 @@ class ChatPanel(QWidget):
         self.stop_button.clicked.connect(self.stop)
         self.explain_error_button.clicked.connect(self.explain_selected_error)
         self.fix_button.clicked.connect(self.fix_selected_instruction)
-        self.example_button.clicked.connect(lambda: self.ask_ai("Genera un ejemplo valido y breve de Miezee."))
         self.add_assistant(OFFLINE_MESSAGE)
 
     def send(self) -> None:
@@ -84,6 +91,9 @@ class ChatPanel(QWidget):
             return
         if text.lower().startswith("/arreglarpantalla") or self.is_fix_request(text):
             self.fix_current_screen()
+            return
+        if self.is_miezee_program_request(text):
+            self.generate_program(text)
             return
 
         handled, response = self.handler.handle(text, self.get_source())
@@ -119,8 +129,7 @@ class ChatPanel(QWidget):
         description = text[len("/GenerarPantalla"):].strip()
         if not description:
             self.add_assistant(
-                "Describe que pantalla o programa quieres crear. "
-                "Ejemplo: /GenerarPantalla registro de empleados con nombre, edad y sueldo."
+                "Describe que pantalla o programa quieres crear."
             )
             return
         self.ask_ai(self._screen_generation_prompt(description), request_type="generate_screen")
@@ -128,12 +137,71 @@ class ChatPanel(QWidget):
     def generate_function(self, text: str) -> None:
         description = text[len("/GenerarFuncion"):].strip()
         if not description:
-            self.add_assistant("Describe la funcion. Ejemplo: /GenerarFuncion calcular total con precio double y cantidad int.")
+            self.add_assistant("Describe la funcion que quieres crear.")
+            return
+        if self.wants_console_input(description):
+            self.pending_generation_request = description
+            self.generation_retry_count = 0
+            self.ask_ai(self._program_generation_prompt(description), request_type="generate_program")
             return
         self.ask_ai(self._function_generation_prompt(description), request_type="generate_function")
 
+    def generate_program(self, text: str) -> None:
+        self.pending_generation_request = text
+        self.generation_retry_count = 0
+        self.ask_ai(self._program_generation_prompt(text), request_type="generate_program")
+
+    def _program_generation_prompt(self, description: str) -> str:
+        return f"""Genera solamente codigo Miezee valido, sin explicaciones.
+El codigo debe resolver la solicitud del usuario usando el lenguaje propio Miezee.
+
+Sintaxis permitida para consola:
+PEDIR <identificador> COMO <TIPO> CON MENSAJE "Texto"
+DEFINIR <identificador> COMO <TIPO> = <expresion>
+CAMBIAR <identificador> A <expresion>
+MOSTRAR <expresion>
+
+Tipos permitidos: ENTERO, DECIMAL, TEXTO, BOOLEANO, byte, short, int, long, float, double, char, boolean.
+Operadores permitidos: +, -, *, /, ^, **, <, <=, >, >=, ==, !=, Y, O, NO.
+Funcion matematica permitida: sqrt(expresion_numerica).
+Booleanos permitidos: VERDADERO, FALSO, true y false.
+Usa identificadores simples sin acentos, espacios ni caracteres especiales.
+No uses parametros o variables llamados a, y, o, no, mostrar, cambiar ni palabras reservadas.
+Para programas interactivos NO uses FUNCION, PARAMETRO, RETORNAR ni FIN FUNCION.
+Si calculas un resultado, primero declaralo con DEFINIR y despues muestralo con MOSTRAR.
+No muestres una variable si antes no aparece en PEDIR o DEFINIR.
+No uses sintaxis de Java, Python, C#, HTML ni pseudocodigo externo.
+No expliques nada antes ni despues del codigo.
+
+Solicitud del usuario: {description}"""
+
+    def _program_repair_prompt(self, description: str, code: str, errors_text: str) -> str:
+        return f"""El siguiente codigo Miezee fue generado para la solicitud del usuario, pero NO paso el analisis semantico.
+Corrigelo y devuelve solamente codigo Miezee valido, sin explicaciones.
+
+Reglas obligatorias para programa interactivo:
+- Usa PEDIR para capturar datos desde consola.
+- Usa DEFINIR para calcular resultados antes de mostrarlos.
+- Usa MOSTRAR solamente con literales o identificadores declarados previamente.
+- No uses FUNCION, PARAMETRO, RETORNAR ni FIN FUNCION.
+- No uses sintaxis de Java, Python, C#, HTML ni pseudocodigo externo.
+- Puedes usar sqrt(expresion_numerica) para raiz cuadrada.
+
+Solicitud original:
+{description}
+
+Errores del analizador:
+{errors_text}
+
+Codigo invalido:
+```miezee
+{code}
+```"""
+
     def _function_generation_prompt(self, description: str) -> str:
         return f"""Genera solamente codigo Miezee valido para una funcion, sin explicaciones.
+Una funcion Miezee no pide datos por consola; solo recibe PARAMETRO y devuelve RETORNAR.
+Si el usuario necesita ingresar datos por consola, se debe generar un programa con PEDIR, no una funcion.
 Sintaxis obligatoria:
 FUNCION <nombre> RETORNA <TIPO>
 PARAMETRO <nombre> COMO <TIPO>
@@ -142,14 +210,10 @@ FIN FUNCION
 
 Tipos permitidos: ENTERO, DECIMAL, TEXTO, BOOLEANO, byte, short, int, long, float, double, char, boolean.
 Operadores permitidos: +, -, *, /, ^, **, <, <=, >, >=, ==, !=, Y, O, NO.
+Funcion matematica permitida: sqrt(expresion_numerica).
 Usa identificadores simples sin acentos, espacios ni caracteres especiales.
+No uses parametros llamados a, y, o, no, mostrar, cambiar ni palabras reservadas.
 No uses llaves, parentesis de declaracion, flechas ni sintaxis de Java/Python.
-Ejemplo valido:
-FUNCION calcular_total RETORNA double
-PARAMETRO precio COMO double
-PARAMETRO cantidad COMO int
-RETORNAR precio * cantidad
-FIN FUNCION
 
 Solicitud del usuario: {description}"""
 
@@ -165,7 +229,7 @@ AGREGAR BOTON "Texto" GUARDAR COMO JSON "archivo.json"
 AGREGAR BOTON "Texto" GUARDAR COMO CSV "archivo.csv"
 MOSTRAR PANTALLA
 
-Tambien puedes usar estas instrucciones generales si aportan al ejemplo:
+Tambien puedes usar estas instrucciones generales si aportan a la solicitud:
 DEFINIR <identificador> COMO <TIPO> = <expresion>
 CAMBIAR <identificador> A <expresion>
 MOSTRAR <expresion>
@@ -174,6 +238,7 @@ Tipos permitidos: ENTERO, DECIMAL, TEXTO, BOOLEANO, FECHA, ARCHIVO.
 Tipos extendidos permitidos: byte, short, int, long, float, double, char, boolean.
 Booleanos permitidos: VERDADERO, FALSO, true y false.
 Operadores permitidos: +, -, *, /, ^, **, <, <=, >, >=, ==, !=, Y, O, NO.
+Funcion matematica permitida: sqrt(expresion_numerica).
 Estructuras permitidas para logica: IF condicion, ELSE, FOR i DESDE 1 HASTA 10, WHILE condicion, SWITCH valor, BREAK, CONTINUE.
 No inventes instrucciones como TABLA, VALIDAR, SI o ENTONCES.
 La palabra GUARDAR solo se permite dentro de AGREGAR BOTON "Texto" GUARDAR COMO FORMATO "archivo".
@@ -185,14 +250,6 @@ No mezcles TEXTO con ENTERO, DECIMAL, BOOLEANO, FECHA o ARCHIVO usando +.
 Si quieres mostrar una etiqueta y un valor numerico o booleano, usa dos instrucciones MOSTRAR separadas.
 Usa identificadores simples sin acentos ni espacios.
 Para una pantalla low-code real, siempre empieza con CREAR PANTALLA y termina con MOSTRAR PANTALLA.
-Ejemplo valido:
-CREAR PANTALLA "Registro de empleados"
-AGREGAR CAMPO nombre COMO TEXTO
-AGREGAR CAMPO edad COMO ENTERO
-AGREGAR CAMPO sueldo COMO DECIMAL
-AGREGAR CAMPO activo COMO BOOLEANO
-AGREGAR BOTON "Guardar" GUARDAR COMO WORD "empleados.rtf"
-MOSTRAR PANTALLA
 Solicitud del usuario: {description}"""
 
     def is_fix_request(self, text: str) -> bool:
@@ -200,6 +257,30 @@ Solicitud del usuario: {description}"""
         fix_words = ("arregla", "corrige", "repara", "ajusta")
         target_words = ("codigo", "código", "pantalla", "actual")
         return any(word in lowered for word in fix_words) and any(word in lowered for word in target_words)
+
+    def is_miezee_program_request(self, text: str) -> bool:
+        lowered = text.lower()
+        asks_to_generate = any(word in lowered for word in ("genera", "crear", "crea", "haz", "realiza"))
+        mentions_miezee = "miezee" in lowered
+        mentions_program = any(word in lowered for word in ("programa", "codigo", "código", "funcion", "función"))
+        return asks_to_generate and mentions_program and (mentions_miezee or self.wants_console_input(text))
+
+    def wants_console_input(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(
+            phrase in lowered
+            for phrase in (
+                "pedir",
+                "pida",
+                "ingresar",
+                "ingrese",
+                "capturar",
+                "captura",
+                "consola",
+                "entrada",
+                "datos",
+            )
+        )
 
     def fix_current_screen(self) -> None:
         source = self.get_source().strip()
@@ -250,7 +331,7 @@ Codigo actual:
         self.ask_ai(f"Propón una correccion para esta instruccion Miezee:\n{error.instruction}\nError: {error.explanation}")
 
     def ask_ai(self, prompt: str, request_type: str = "chat") -> None:
-        self.status.setText("Consultando")
+        self.status.setText("Consultando modelo local")
         self.current_request = request_type
         self.current_worker = AIWorker(prompt)
         self.current_worker.signals.finished.connect(self._ai_finished)
@@ -263,15 +344,24 @@ Codigo actual:
             self.status.setText("Cancelado")
 
     def _ai_finished(self, text: str) -> None:
-        self.status.setText("Conectado" if "Modo sin conexion" not in text else "Sin conexion")
-        if self.current_request in {"generate_screen", "generate_function"} and "Modo sin conexion" not in text and "Error" not in text:
+        unavailable = self.is_local_unavailable(text)
+        self.status.setText("Ejecutando localmente" if not unavailable else "Local no disponible")
+        if self.current_request in {"generate_screen", "generate_function", "generate_program", "generate_program_retry"} and not unavailable and "Error" not in text:
             code = self.extract_miezee_code(text)
+            if self.current_request in {"generate_program", "generate_program_retry"}:
+                if self.handle_generated_program(code):
+                    return
+                self.current_request = "chat"
+                self.pending_generation_request = ""
+                self.generation_retry_count = 0
+                return
             if code:
                 self.code_generated.emit(code)
                 self.add_assistant(f"Codigo Miezee generado y enviado al editor:\n\n```miezee\n{code}\n```")
                 self.current_request = "chat"
+                self.pending_generation_request = ""
                 return
-        if self.current_request == "fix_code" and "Modo sin conexion" not in text and "Error" not in text:
+        if self.current_request == "fix_code" and not unavailable and "Error" not in text:
             code = self.extract_miezee_code(text)
             if code:
                 result = SemanticAnalyzer().analyze(code)
@@ -282,17 +372,84 @@ Codigo actual:
                 return
         self.add_assistant(text)
         self.current_request = "chat"
+        self.pending_generation_request = ""
+        self.generation_retry_count = 0
 
     def _ai_failed(self, text: str) -> None:
         self.status.setText("Error de API")
         self.add_assistant(text)
         self.current_request = "chat"
 
+    def is_local_unavailable(self, text: str) -> bool:
+        return "Modo sin conexion" in text or "Modelo local no disponible" in text
+
+    def handle_generated_program(self, code: str) -> bool:
+        if not code:
+            self.add_assistant("La IA no genero codigo Miezee util. Intenta reformular la solicitud con mas detalle.")
+            return False
+        result = SemanticAnalyzer().analyze(code)
+        if result.ok:
+            self.code_generated.emit(code)
+            self.add_assistant(f"Codigo Miezee generado y enviado al editor:\n\n```miezee\n{code}\n```")
+            return True
+        errors_text = "\n".join(
+            f"- {err.code} linea {err.line}: {err.explanation}. Regla: {err.rule}. Instruccion: {err.instruction}"
+            for err in result.errors
+        )
+        if self.generation_retry_count < 1:
+            self.generation_retry_count += 1
+            self.ask_ai(
+                self._program_repair_prompt(self.pending_generation_request, code, errors_text),
+                request_type="generate_program_retry",
+            )
+            return True
+        self.add_assistant(
+            "La IA genero codigo Miezee, pero no paso el analisis semantico y no se envio al editor.\n\n"
+            f"Errores detectados:\n{errors_text}\n\n"
+            f"Codigo rechazado:\n```miezee\n{code}\n```"
+        )
+        return False
+
     def add_user(self, text: str) -> None:
-        self.history.append(f"<b>Usuario:</b> {self.render_inline_markup(text)}")
+        self.add_message_bubble("Usuario", text, "left")
 
     def add_assistant(self, text: str) -> None:
-        self.history.append(f"<b>Asistente:</b> {self.render_inline_markup(text)}")
+        self.add_message_bubble("Asistente", text, "right")
+
+    def add_message_bubble(self, sender: str, text: str, side: str) -> None:
+        align = "left" if side == "left" else "right"
+        bubble_color = "#263241" if side == "left" else "#3a4656"
+        border_color = "#34465a" if side == "left" else "#4d5c70"
+        sender_color = "#9fb4cf" if side == "left" else "#d6dfeb"
+        content = self.render_inline_markup(text)
+        bubble = f"""
+<table width="100%" cellspacing="0" cellpadding="0" style="margin: 6px 0;">
+  <tr>
+    <td align="{align}">
+      <div style="
+        display: inline-block;
+        max-width: 78%;
+        background: {bubble_color};
+        color: #f0f3f6;
+        border: 1px solid {border_color};
+        border-radius: 10px;
+        padding: 8px 10px;
+        line-height: 1.35;
+        text-align: left;
+      ">
+        <div style="font-size: 11px; color: {sender_color}; margin-bottom: 4px;">
+          <b>{html.escape(sender)}</b>
+        </div>
+        <div>{content}</div>
+      </div>
+    </td>
+  </tr>
+</table>
+"""
+        self.history.moveCursor(QTextCursor.End)
+        self.history.insertHtml(bubble)
+        self.history.insertHtml("<br>")
+        self.history.moveCursor(QTextCursor.End)
 
     def render_inline_markup(self, text: str) -> str:
         escaped = html.escape(text)
@@ -321,7 +478,7 @@ Codigo actual:
     def extract_miezee_code(self, text: str) -> str:
         fenced = re.search(r"```(?:miezee)?\s*([\s\S]*?)```", text, re.IGNORECASE)
         code = fenced.group(1) if fenced else text
-        valid_starts = ("DEFINIR ", "CAMBIAR ", "MOSTRAR ", "CREAR ", "AGREGAR ", "IF ", "ELSE", "FOR ", "WHILE ", "SWITCH ", "BREAK", "CONTINUE", "FUNCION ", "PARAMETRO ", "RETORNAR ", "FIN FUNCION")
+        valid_starts = ("PEDIR ", "DEFINIR ", "CAMBIAR ", "MOSTRAR ", "CREAR ", "AGREGAR ", "IF ", "ELSE", "FOR ", "WHILE ", "SWITCH ", "BREAK", "CONTINUE", "FUNCION ", "PARAMETRO ", "RETORNAR ", "FIN FUNCION")
         lines = []
         for raw_line in code.splitlines():
             line = raw_line.strip().replace("\\_", "_")

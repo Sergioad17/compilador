@@ -13,9 +13,11 @@ from miezee.core.ast_nodes import (
     EndFunctionStatement,
     ElseStatement,
     ForStatement,
+    FunctionCall,
     FunctionStatement,
     Identifier,
     IfStatement,
+    InputStatement,
     Literal,
     ParameterStatement,
     ShowScreenStatement,
@@ -100,6 +102,8 @@ class SemanticAnalyzer:
                 self._analyze_return(statement)
             elif isinstance(statement, EndFunctionStatement):
                 self._analyze_end_function(statement)
+            elif isinstance(statement, InputStatement):
+                self._analyze_input(statement)
         return AnalysisResult(source, self.errors, self.symbols, self.rules_applied, self.ui_screen)
 
     def _analyze_create_screen(self, stmt: CreateScreenStatement) -> None:
@@ -205,6 +209,16 @@ class SemanticAnalyzer:
         self.current_function = None
         self._rule("RFN04")
 
+    def _analyze_input(self, stmt: InputStatement) -> None:
+        if stmt.name.upper() in RESERVED_WORDS:
+            self._error("ES05", stmt.line, stmt.raw, f"'{stmt.name}' es una palabra reservada.", "RI03", "Usa un nombre como base, altura o numero1.")
+            return
+        if self.symbols.exists(stmt.name):
+            self._error("ES02", stmt.line, stmt.raw, f"El identificador '{stmt.name}' ya fue declarado.", "RI02", "Usa otro nombre para la entrada.")
+            return
+        self.symbols.define(Symbol(stmt.name, stmt.data_type, stmt.line, "entrada de consola"))
+        self._rule("RIN01")
+
     def _analyze_change(self, stmt: ChangeStatement) -> None:
         symbol = self.symbols.get(stmt.name)
         if symbol is None:
@@ -238,7 +252,24 @@ class SemanticAnalyzer:
             return DataType.DESCONOCIDO
         if isinstance(expr, BinaryOp):
             return self._infer_binary(expr, instruction)
+        if isinstance(expr, FunctionCall):
+            return self._infer_function_call(expr, instruction)
         return DataType.DESCONOCIDO
+
+    def _infer_function_call(self, expr: FunctionCall, instruction: str) -> DataType:
+        name = expr.name.lower()
+        if name != "sqrt":
+            self._error("ES03", expr.line, instruction, f"La funcion matematica '{expr.name}' no esta soportada.", "RT08", "Usa sqrt(valor) o una expresion aritmetica valida.", [expr.name])
+            return DataType.DESCONOCIDO
+        if len(expr.arguments) != 1:
+            self._error("ES03", expr.line, instruction, "sqrt requiere exactamente un argumento.", "RT08", "Usa sqrt(valor).")
+            return DataType.DESCONOCIDO
+        argument_type = self._infer(expr.arguments[0], instruction)
+        if argument_type not in NUMERIC_TYPES:
+            self._error("ES03", expr.line, instruction, f"sqrt requiere un valor numerico, pero recibio {argument_type.value}.", "RT08", "Usa sqrt con ENTERO, DECIMAL, FLOAT, DOUBLE u otro tipo numerico.", types=[argument_type.value])
+            return DataType.DESCONOCIDO
+        self._rule("RT08")
+        return DataType.DOUBLE
 
     def _infer_binary(self, expr: BinaryOp, instruction: str) -> DataType:
         left = self._infer(expr.left, instruction)

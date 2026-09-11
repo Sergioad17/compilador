@@ -33,6 +33,12 @@ class BinaryOp(Expr):
 
 
 @dataclass
+class FunctionCall(Expr):
+    name: str
+    arguments: list[Expr]
+
+
+@dataclass
 class Statement:
     line: int
     raw: str
@@ -136,6 +142,13 @@ class ReturnStatement(Statement):
 @dataclass
 class EndFunctionStatement(Statement):
     pass
+
+
+@dataclass
+class InputStatement(Statement):
+    name: str
+    data_type: DataType
+    message: str
 
 
 @dataclass

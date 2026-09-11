@@ -9,7 +9,7 @@ class MiezeeHighlighter(QSyntaxHighlighter):
         keyword_format = QTextCharFormat()
         keyword_format.setForeground(QColor("#569CD6"))
         keyword_format.setFontWeight(QFont.Bold)
-        for word in ["DEFINIR", "COMO", "CAMBIAR", "A", "MOSTRAR", "Y", "O", "NO", "VERDADERO", "FALSO", "TRUE", "FALSE", "CREAR", "PANTALLA", "AGREGAR", "CAMPO", "BOTON", "GUARDAR", "IF", "ELSE", "FOR", "DESDE", "HASTA", "WHILE", "SWITCH", "BREAK", "CONTINUE", "FUNCION", "RETORNA", "PARAMETRO", "RETORNAR", "FIN"]:
+        for word in ["DEFINIR", "COMO", "CAMBIAR", "A", "MOSTRAR", "Y", "O", "NO", "VERDADERO", "FALSO", "TRUE", "FALSE", "CREAR", "PANTALLA", "AGREGAR", "CAMPO", "BOTON", "GUARDAR", "IF", "ELSE", "FOR", "DESDE", "HASTA", "WHILE", "SWITCH", "BREAK", "CONTINUE", "FUNCION", "RETORNA", "PARAMETRO", "RETORNAR", "FIN", "PEDIR", "CON", "MENSAJE"]:
             self.rules.append((QRegularExpression(fr"\b{word}\b"), keyword_format))
         type_format = QTextCharFormat()
         type_format.setForeground(QColor("#4EC9B0"))

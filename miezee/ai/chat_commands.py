@@ -2,21 +2,10 @@ from miezee.core.semantic_analyzer import SemanticAnalyzer, AnalysisResult
 from miezee.core.semantic_rules import RULES_HELP, TYPE_HELP
 
 
-VALID_EXAMPLE = """DEFINIR edad COMO ENTERO = 25
-CAMBIAR edad A edad + 1
-MOSTRAR edad >= 18"""
-
-ERROR_EXAMPLE = """DEFINIR sueldo COMO DECIMAL = 12000.50
-DEFINIR contrato COMO ARCHIVO = ARCHIVO("contrato.pdf")
-CAMBIAR sueldo A sueldo + contrato"""
-
 CHAT_COMMANDS = [
     "/ayuda",
     "/tipos",
     "/reglas",
-    "/ejemplo",
-    "/ejemplo correcto",
-    "/ejemplo error",
     "/analizar",
     "/errores",
     "/tabla",
@@ -45,10 +34,6 @@ class ChatCommandHandler:
             return True, TYPE_HELP
         if text == "/reglas":
             return True, RULES_HELP
-        if text in {"/ejemplo", "/ejemplo correcto"}:
-            return True, VALID_EXAMPLE
-        if text == "/ejemplo error":
-            return True, ERROR_EXAMPLE
         if text == "/analizar":
             self.last_result = self.analyzer.analyze(source)
             return True, self._analysis_summary(self.last_result)

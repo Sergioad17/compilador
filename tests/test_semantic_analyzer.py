@@ -65,6 +65,16 @@ MOSTRAR resultado"""
         self.assertTrue(result.ok)
         self.assertEqual(result.symbol_table.get("resultado").data_type.value, "LONG")
 
+    def test_sqrt_math_function(self):
+        source = """PEDIR lado1 COMO double CON MENSAJE "Ingresa la longitud del primer lado:"
+PEDIR lado2 COMO double CON MENSAJE "Ingresa la longitud del segundo lado:"
+DEFINIR hipotenusa COMO double = sqrt(lado1^2 + lado2^2)
+MOSTRAR hipotenusa"""
+        result = self.analyzer.analyze(source)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.symbol_table.get("hipotenusa").data_type.value, "DOUBLE")
+        self.assertIn("RT08", result.rules_applied)
+
     def test_byte_range_error(self):
         result = self.analyzer.analyze("DEFINIR pequeno COMO byte = 200")
         self.assertFalse(result.ok)

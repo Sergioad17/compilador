@@ -49,6 +49,9 @@ RESERVED_WORDS = {
     "PARAMETRO",
     "RETORNAR",
     "FIN",
+    "PEDIR",
+    "CON",
+    "MENSAJE",
 }
 
 RULES = {
@@ -76,6 +79,7 @@ RULES = {
     "RFN02": "Los parametros pertenecen a una funcion activa.",
     "RFN03": "RETORNAR debe ser compatible con el tipo de retorno de la funcion.",
     "RFN04": "FIN FUNCION cierra una funcion activa.",
+    "RIN01": "PEDIR declara una entrada que se captura desde la consola interactiva.",
 }
 
 TYPE_HELP = """Tipos de datos de Miezee:

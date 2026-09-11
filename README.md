@@ -148,6 +148,7 @@ La aplicacion usa modo oscuro y una distribucion similar a un editor de codigo:
 Los comandos `/analizar`, `/errores`, `/tabla`, `/tipos` y `/reglas` funcionan sin conexion.
 El comando `/GenerarPantalla` usa Ollama local para crear codigo Miezee, lo coloca en el editor y ejecuta el analizador semantico.
 Cuando genera instrucciones `CREAR PANTALLA`, `AGREGAR CAMPO`, `AGREGAR BOTON` y `MOSTRAR PANTALLA`, la pestaña Vista previa muestra un formulario basico. Si el boton incluye `GUARDAR COMO`, al presionarlo guarda los datos en `outputs/` como TXT, RTF editable en Word, JSON o CSV.
+Ademas de Miezee, el chat puede responder dudas de programacion general, logica, algoritmos e investigacion academica basica usando el modelo local. No tiene acceso a Internet desde la aplicacion.
 
 ## Estructura del proyecto
 
