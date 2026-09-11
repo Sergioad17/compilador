@@ -1,0 +1,3 @@
+DEFINIR sueldo COMO DECIMAL = 12000.50
+DEFINIR contrato COMO ARCHIVO = ARCHIVO("contrato.pdf")
+CAMBIAR sueldo A sueldo + contrato

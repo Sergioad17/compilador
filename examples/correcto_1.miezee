@@ -1,0 +1,3 @@
+DEFINIR edad COMO ENTERO = 25
+CAMBIAR edad A edad + 1
+MOSTRAR edad
