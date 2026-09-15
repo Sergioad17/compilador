@@ -11,13 +11,11 @@ class PythonExecutor:
         self.workdir = workdir or Path.cwd()
 
     def run(self, source: str) -> str:
-        temp_path = self.workdir / ".miezee_run_tmp.py"
-        temp_path.write_text(source, encoding="utf-8")
         if self._looks_like_gui(source):
-            subprocess.Popen([sys.executable, str(temp_path)], cwd=str(self.workdir))
+            subprocess.Popen([sys.executable, "-c", source], cwd=str(self.workdir))
             return "Aplicacion Python iniciada. Si abre una ventana, cierrala para terminarla."
         completed = subprocess.run(
-            [sys.executable, str(temp_path)],
+            [sys.executable, "-c", source],
             cwd=str(self.workdir),
             text=True,
             capture_output=True,

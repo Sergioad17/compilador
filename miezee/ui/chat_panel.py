@@ -26,12 +26,14 @@ class ChatPanel(QWidget):
         self.pending_original_code = ""
         self.pending_generation_request = ""
         self.generation_retry_count = 0
+        self.theme_name = "Default"
+        self.messages: list[tuple[str, str, str]] = []
 
         layout = QVBoxLayout(self)
         self.status = QLabel(AIClient().status())
         self.history = QTextEdit()
         self.history.setReadOnly(True)
-        self.history.setStyleSheet("QTextEdit {background:#1e1e1e; border:1px solid #333333; padding:8px;}")
+        self.apply_chat_theme()
         self.input = QLineEdit()
         self.input.setPlaceholderText("Escribe un mensaje o /ayuda...")
         self.command_list = QListWidget()
@@ -63,7 +65,7 @@ class ChatPanel(QWidget):
         self.input.returnPressed.connect(self.send)
         self.input.textChanged.connect(self.update_command_suggestions)
         self.command_list.itemClicked.connect(self.insert_command)
-        self.clear_button.clicked.connect(self.history.clear)
+        self.clear_button.clicked.connect(self.clear_chat)
         self.stop_button.clicked.connect(self.stop)
         self.explain_error_button.clicked.connect(self.explain_selected_error)
         self.fix_button.clicked.connect(self.fix_selected_instruction)
@@ -94,7 +96,7 @@ class ChatPanel(QWidget):
         handled, response = self.handler.handle(text, self.get_source())
         if handled:
             if response == "__CLEAR_CHAT__":
-                self.history.clear()
+                self.clear_chat()
             else:
                 self.add_assistant(response)
             if lowered == "/analizar":
@@ -420,10 +422,15 @@ Codigo actual:
         self.add_message_bubble("Asistente", text, "right")
 
     def add_message_bubble(self, sender: str, text: str, side: str) -> None:
+        self.messages.append((sender, text, side))
+        self.render_message_bubble(sender, text, side)
+
+    def render_message_bubble(self, sender: str, text: str, side: str) -> None:
         align = "left" if side == "left" else "right"
-        bubble_color = "#263241" if side == "left" else "#3a4656"
-        border_color = "#34465a" if side == "left" else "#4d5c70"
-        sender_color = "#9fb4cf" if side == "left" else "#d6dfeb"
+        palette = self.chat_palette()
+        bubble_color = palette["user_bg"] if side == "left" else palette["assistant_bg"]
+        border_color = palette["user_border"] if side == "left" else palette["assistant_border"]
+        sender_color = palette["user_sender"] if side == "left" else palette["assistant_sender"]
         content = self.render_inline_markup(text)
         bubble = f"""
 <table width="100%" cellspacing="0" cellpadding="0" style="margin: 6px 0;">
@@ -442,6 +449,43 @@ Codigo actual:
         self.history.insertHtml("<br>")
         self.history.moveCursor(QTextCursor.End)
 
+    def clear_chat(self) -> None:
+        self.messages = []
+        self.history.clear()
+
+    def set_theme(self, theme_name: str) -> None:
+        self.theme_name = theme_name
+        self.apply_chat_theme()
+        cached_messages = list(self.messages)
+        self.history.clear()
+        for sender, text, side in cached_messages:
+            self.render_message_bubble(sender, text, side)
+
+    def apply_chat_theme(self) -> None:
+        border = "#7C3AED" if self.theme_name == "Morado" else "#333333"
+        self.history.setStyleSheet(f"QTextEdit {{background:#1e1e1e; border:1px solid {border}; padding:8px;}}")
+
+    def chat_palette(self) -> dict[str, str]:
+        if self.theme_name == "Morado":
+            return {
+                "user_bg": "#241B35",
+                "assistant_bg": "#302044",
+                "user_border": "#6D28D9",
+                "assistant_border": "#A78BFA",
+                "user_sender": "#C4B5FD",
+                "assistant_sender": "#E9D5FF",
+                "code_border": "#7C3AED",
+            }
+        return {
+            "user_bg": "#263241",
+            "assistant_bg": "#3a4656",
+            "user_border": "#34465a",
+            "assistant_border": "#4d5c70",
+            "user_sender": "#9fb4cf",
+            "assistant_sender": "#d6dfeb",
+            "code_border": "#333333",
+        }
+
     def render_inline_markup(self, text: str) -> str:
         escaped = html.escape(text)
         code_blocks: list[str] = []
@@ -449,7 +493,8 @@ Codigo actual:
         def save_code_block(match) -> str:
             code = match.group(2)
             placeholder = f"@@CODE_BLOCK_{len(code_blocks)}@@"
-            code_blocks.append("<pre style='background:#181818; padding:8px; border:1px solid #333333;'>" f"<code>{code}</code></pre>")
+            code_border = self.chat_palette()["code_border"]
+            code_blocks.append("<pre style='background:#181818; padding:8px; border:1px solid " + code_border + ";'>" f"<code>{code}</code></pre>")
             return placeholder
 
         escaped = re.sub(r"```(\w+)?\n?([\s\S]*?)```", save_code_block, escaped)

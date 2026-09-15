@@ -2,7 +2,7 @@ from pathlib import Path
 import ast
 import sys
 
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -22,11 +22,12 @@ from miezee.core.python_analyzer import PythonAnalyzer, PythonAnalysisResult
 from miezee.core.python_translator import PythonToMiezeeTranslator
 from miezee.core.ui_model import UIScreen
 from miezee.services.file_service import FileService
+from miezee.ui.branding import APP_TITLE, app_icon
 from miezee.ui.chat_panel import ChatPanel
 from miezee.ui.code_editor import CodeEditor
 from miezee.ui.command_palette import CommandPalette
 from miezee.ui.console_panel import ConsolePanel
-from miezee.ui.dark_theme import APP_STYLE
+from miezee.ui.dark_theme import APP_STYLE, THEMES, theme_style
 from miezee.ui.explorer_panel import ExplorerPanel
 from miezee.ui.problems_panel import ProblemsPanel
 from miezee.ui.preview_panel import PreviewPanel
@@ -43,8 +44,10 @@ class MainWindow(QMainWindow):
         self.last_result: PythonAnalysisResult | None = None
         self.current_path: Path | None = None
         self.python_process: QProcess | None = None
+        self.current_theme = "Default"
         self.cleanup_workspace_temp_files()
-        self.setWindowTitle("Miezee IDE")
+        self.setWindowTitle(APP_TITLE)
+        self.setWindowIcon(app_icon())
         self.resize(1360, 820)
         self._build_ui()
         self._build_actions()
@@ -110,6 +113,17 @@ class MainWindow(QMainWindow):
         edit_menu = menu_bar.addMenu("Editar")
         edit_menu.addAction(self._menu_action("Limpiar resultados", "Ctrl+L", self.clear_results))
         edit_menu.addAction(self._menu_action("Cambiar tamano de fuente", "", self.change_font_size))
+        edit_menu.addSeparator()
+        theme_menu = edit_menu.addMenu("Temas")
+        self.theme_actions = QActionGroup(self)
+        self.theme_actions.setExclusive(True)
+        for theme_name in THEMES:
+            action = QAction(theme_name, self)
+            action.setCheckable(True)
+            action.setChecked(theme_name == self.current_theme)
+            action.triggered.connect(lambda _checked=False, name=theme_name: self.apply_theme(name))
+            self.theme_actions.addAction(action)
+            theme_menu.addAction(action)
 
         view_menu = menu_bar.addMenu("Ver")
         view_menu.addAction(self._menu_action("Mostrar vista previa", "F7", self.show_preview))
@@ -152,6 +166,16 @@ class MainWindow(QMainWindow):
         action.setShortcut(QKeySequence(keys))
         action.triggered.connect(callback)
         self.addAction(action)
+
+    def apply_theme(self, theme_name: str) -> None:
+        self.current_theme = theme_name
+        icon = app_icon(theme_name)
+        self.setWindowIcon(icon)
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(theme_style(theme_name))
+            app.setWindowIcon(icon)
+        self.chat.set_theme(theme_name)
 
     def new_file(self) -> None:
         editor = CodeEditor()
@@ -505,6 +529,7 @@ class MainWindow(QMainWindow):
 
 def run_app() -> None:
     app = QApplication([])
+    app.setWindowIcon(app_icon())
     app.setStyleSheet(APP_STYLE)
     window = MainWindow()
     window.show()

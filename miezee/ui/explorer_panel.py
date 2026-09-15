@@ -34,26 +34,25 @@ class ExplorerPanel(QWidget):
         self.tree.clear()
         root_item = QTreeWidgetItem([self.root.name or str(self.root)])
         self.tree.addTopLevelItem(root_item)
-        groups = {
-            "Python (.py)": QTreeWidgetItem(["Python (.py)"]),
-            "Miezee (.miezee)": QTreeWidgetItem(["Miezee (.miezee)"]),
-            "Datos y documentos": QTreeWidgetItem(["Datos y documentos"]),
-        }
-        for group in groups.values():
-            root_item.addChild(group)
+        groups: dict[str, QTreeWidgetItem] = {}
         for path in FileService.project_files(self.root) if self.root.exists() else []:
-            parent = self._group_for(path, groups)
+            group_name = self._group_name_for(path)
+            parent = groups.get(group_name)
+            if parent is None:
+                parent = QTreeWidgetItem([group_name])
+                groups[group_name] = parent
+                root_item.addChild(parent)
             item = QTreeWidgetItem([path.name])
             item.setData(0, 1, str(path))
             parent.addChild(item)
         self.tree.expandAll()
 
-    def _group_for(self, path: Path, groups: dict[str, QTreeWidgetItem]) -> QTreeWidgetItem:
+    def _group_name_for(self, path: Path) -> str:
         if path.suffix.lower() == ".py":
-            return groups["Python (.py)"]
+            return "Python (.py)"
         if path.suffix.lower() == ".miezee":
-            return groups["Miezee (.miezee)"]
-        return groups["Datos y documentos"]
+            return "Miezee (.miezee)"
+        return "Datos y documentos"
 
     def add_open_file(self, path: str) -> None:
         # Los archivos abiertos ya se muestran en las pestanas superiores.
