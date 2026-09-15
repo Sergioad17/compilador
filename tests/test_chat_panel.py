@@ -9,8 +9,8 @@ from miezee.ui.chat_panel import ChatPanel
 
 
 class RecordingChatPanel(ChatPanel):
-    def __init__(self):
-        super().__init__(lambda: "", lambda: None)
+    def __init__(self, source: str = ""):
+        super().__init__(lambda: source, lambda: None)
         self.recorded_prompt = ""
         self.recorded_request_type = ""
         self.generated_code = ""
@@ -29,102 +29,115 @@ class ChatPanelTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_generated_code_is_normalized_to_supported_miezee(self):
+    def test_extract_python_code_from_fence(self):
         panel = ChatPanel(lambda: "", lambda: None)
-        raw = """DEFINIR nombre COMO TEXTO = "Juan Perez"
-DEFINIR edad COMO ENTERO = 30
-DEFINIR sueldo COMO DECIMAL = 2500.50
-DEFINIR activo COMO BOOLEANO = TRUE
-CAMBIAR edad A 18 SI edad < 18
-CAMBIAR sueldo A 0 SI sueldo < 0
-MOSTRAR "Nombre: " + nombre
-MOSTRAR "Edad: " + edad
-MOSTRAR "Sueldo: " + sueldo"""
+        code = panel.extract_python_code("""Aqui esta:
+```python
+base = float(input("Base: "))
+print(base)
+```""")
 
-        code = panel.extract_miezee_code(raw)
+        self.assertIn("base = float", code)
+        self.assertIn("print(base)", code)
 
-        self.assertIn("DEFINIR activo COMO BOOLEANO = VERDADERO", code)
-        self.assertNotIn(" SI ", code)
-        self.assertIn('MOSTRAR "Edad: "', code)
-        self.assertIn("MOSTRAR edad", code)
-
-    def test_generated_screen_adds_missing_show_and_unescapes_underscores(self):
+    def test_extract_python_code_without_fence_ignores_intro_text(self):
         panel = ChatPanel(lambda: "", lambda: None)
-        raw = '''CREAR PANTALLA "Calculadora financiera"
-AGREGAR CAMPO producto COMO TEXTO
-AGREGAR CAMPO precio\\_unitario COMO DECIMAL
-AGREGAR CAMPO potencia\\_descuento COMO DECIMAL
-AGREGAR BOTON "Suma"'''
+        code = panel.extract_python_code("""Claro, aqui tienes una pantalla:
+import tkinter as tk
 
-        code = panel.extract_miezee_code(raw)
+root = tk.Tk()
+root.mainloop()
 
-        self.assertIn("precio_unitario", code)
-        self.assertIn("potencia_descuento", code)
-        self.assertTrue(code.endswith("MOSTRAR PANTALLA"))
+Explicacion: abre una ventana.""")
+
+        self.assertTrue(code.startswith("import tkinter as tk"))
+        self.assertIn("root.mainloop()", code)
+        self.assertNotIn("Claro", code)
+        self.assertNotIn("Explicacion", code)
 
     def test_fix_request_detection(self):
         panel = ChatPanel(lambda: "", lambda: None)
         self.assertTrue(panel.is_fix_request("arregla el codigo de esta pantalla"))
         self.assertTrue(panel.is_fix_request("corrige la pantalla actual"))
 
-    def test_if_else_are_preserved(self):
-        panel = ChatPanel(lambda: "", lambda: None)
-        code = panel.extract_miezee_code("IF edad >= 18\nELSE\nMOSTRAR edad")
-        self.assertIn("IF edad >= 18", code)
-        self.assertIn("ELSE", code)
-
     def test_program_generation_request_detection(self):
         panel = ChatPanel(lambda: "", lambda: None)
-        self.assertTrue(panel.is_miezee_program_request("genera un programa Miezee para calcular el area de un triangulo"))
-        self.assertTrue(panel.is_miezee_program_request("haz codigo que pida datos por consola"))
-        self.assertFalse(panel.is_miezee_program_request("explicame que es un triangulo"))
+        self.assertTrue(panel.is_python_generation_request("genera un programa para calcular el area"))
+        self.assertTrue(panel.is_python_generation_request("haz codigo que pida datos por consola"))
+        self.assertTrue(panel.is_python_generation_request("quiero que hagas una calculadora"))
+        self.assertTrue(panel.is_python_generation_request("implementa validacion de datos"))
+        self.assertTrue(panel.is_python_generation_request("agrega un menu principal"))
+        self.assertTrue(panel.is_python_generation_request("puedes crearme una calculadora"))
+        self.assertTrue(panel.is_python_generation_request("desarrolla un formulario con base de datos"))
+        self.assertTrue(panel.is_python_generation_request("construye una ventana con menu"))
+        self.assertFalse(panel.is_python_generation_request("explicame que es un triangulo"))
+
+    def test_screen_generation_request_detection(self):
+        panel = ChatPanel(lambda: "", lambda: None)
+        self.assertTrue(panel.is_screen_generation_request("quiero que hagas una pantalla de clientes"))
+        self.assertTrue(panel.is_screen_generation_request("crea una interfaz con formulario"))
+        self.assertFalse(panel.is_screen_generation_request("genera un programa por consola"))
+
+    def test_natural_screen_request_uses_screen_prompt(self):
+        panel = RecordingChatPanel()
+        panel.input.setText("quiero que hagas una pantalla de clientes")
+
+        panel.send()
+
+        self.assertEqual(panel.recorded_request_type, "generate_program")
+        self.assertIn("Crea una interfaz grafica real", panel.recorded_prompt)
 
     def test_generate_function_with_console_input_uses_program_prompt(self):
         panel = RecordingChatPanel()
         panel.generate_function("/GenerarFuncion crea un codigo que pida base y altura por consola")
 
         self.assertEqual(panel.recorded_request_type, "generate_program")
-        self.assertIn("PEDIR <identificador>", panel.recorded_prompt)
+        self.assertIn("input()", panel.recorded_prompt)
         self.assertIn("Solicitud del usuario", panel.recorded_prompt)
 
-    def test_extract_preserves_console_input_instruction(self):
-        panel = ChatPanel(lambda: "", lambda: None)
-        code = panel.extract_miezee_code("""Claro, aqui esta:
-PEDIR base COMO double CON MENSAJE "Ingresa la base:"
-PEDIR altura COMO double CON MENSAJE "Ingresa la altura:"
-DEFINIR area COMO double = base * altura / 2
-MOSTRAR area""")
+    def test_generation_prompt_includes_current_editor_code(self):
+        panel = RecordingChatPanel('print("actual")')
 
-        self.assertIn("PEDIR base COMO double", code)
-        self.assertIn("DEFINIR area COMO double = base * altura / 2", code)
+        panel.generate_program("agrega una funcion saludar")
 
-    def test_invalid_generated_program_is_sent_back_to_ai_for_repair(self):
+        self.assertEqual(panel.recorded_request_type, "generate_program")
+        self.assertIn("Codigo actual del editor", panel.recorded_prompt)
+        self.assertIn('print("actual")', panel.recorded_prompt)
+        self.assertIn("Devuelve el archivo Python completo", panel.recorded_prompt)
+
+    def test_valid_generated_python_is_sent_to_editor(self):
         panel = RecordingChatPanel()
         panel.current_request = "generate_program"
-        panel.pending_generation_request = "programa interactivo para calcular el area de un triangulo"
-        panel.generation_retry_count = 0
+        panel.pending_generation_request = "programa simple"
 
-        panel._ai_finished("""PEDIR base COMO DECIMAL
-PEDIR altura COMO DECIMAL
-MOSTRAR "El area del triangulo es:"
-MOSTRAR area""")
+        panel._ai_finished('print("hola")')
 
-        self.assertEqual(panel.recorded_request_type, "generate_program_retry")
-        self.assertIn("El siguiente codigo Miezee fue generado", panel.recorded_prompt)
-        self.assertIn("El identificador 'area' no ha sido declarado", panel.recorded_prompt)
-        self.assertEqual(panel.generated_code, "")
+        self.assertEqual(panel.generated_code, 'print("hola")')
 
-    def test_invalid_return_program_is_sent_back_to_ai_for_repair(self):
+    def test_generated_python_with_value_error_is_sent_to_editor(self):
         panel = RecordingChatPanel()
         panel.current_request = "generate_program"
-        panel.pending_generation_request = "programa interactivo para calcular el area de un octagono"
+        panel.pending_generation_request = "pantalla de hipotenusa"
+        code = """try:
+    numero = float(input("Numero: "))
+except ValueError:
+    print("Ingresa un numero valido")"""
+
+        panel._ai_finished(code)
+
+        self.assertEqual(panel.generated_code, code)
+
+    def test_unsafe_generated_python_is_sent_back_to_ai_for_repair(self):
+        panel = RecordingChatPanel()
+        panel.current_request = "generate_program"
+        panel.pending_generation_request = "programa que liste archivos"
         panel.generation_retry_count = 0
 
-        panel._ai_finished("""PEDIR lado COMO double
-RETORNAR 2 * (1 + 1.4142) * (lado ** 2)""")
+        panel._ai_finished("import os\nprint(os.listdir('.'))")
 
         self.assertEqual(panel.recorded_request_type, "generate_program_retry")
-        self.assertIn("RETORNAR debe estar dentro de una funcion", panel.recorded_prompt)
+        self.assertIn("codigo Python fue generado", panel.recorded_prompt)
+        self.assertIn("no esta permitido", panel.recorded_prompt)
         self.assertEqual(panel.generated_code, "")
 
 

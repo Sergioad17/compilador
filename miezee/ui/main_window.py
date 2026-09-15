@@ -1,4 +1,6 @@
 from pathlib import Path
+import ast
+import sys
 
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
@@ -11,15 +13,13 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QSplitter,
     QTabWidget,
-    QToolBar,
     QWidget,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QProcess, QProcessEnvironment, Qt
 
 from miezee.ai.ai_client import AIClient
-from miezee.core.function_executor import FunctionExecutor
-from miezee.core.program_executor import ProgramSession
-from miezee.core.semantic_analyzer import SemanticAnalyzer, AnalysisResult
+from miezee.core.python_analyzer import PythonAnalyzer, PythonAnalysisResult
+from miezee.core.python_translator import PythonToMiezeeTranslator
 from miezee.core.ui_model import UIScreen
 from miezee.services.file_service import FileService
 from miezee.ui.chat_panel import ChatPanel
@@ -37,11 +37,13 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.root = Path.cwd()
-        self.analyzer = SemanticAnalyzer()
-        self.last_result: AnalysisResult | None = None
+        self.analyzer = PythonAnalyzer()
+        self.translator = PythonToMiezeeTranslator()
+        self.last_result: PythonAnalysisResult | None = None
         self.current_path: Path | None = None
-        self.program_session: ProgramSession | None = None
-        self.setWindowTitle("Miezee IDE")
+        self.python_process: QProcess | None = None
+        self.cleanup_workspace_temp_files()
+        self.setWindowTitle("Miezee IDE - Python Low Code")
         self.resize(1360, 820)
         self._build_ui()
         self._build_actions()
@@ -58,7 +60,7 @@ class MainWindow(QMainWindow):
         self.console_output = ConsolePanel()
         self.console_output.command_submitted.connect(self.execute_console_command)
         self.symbols = SymbolTablePanel()
-        self.preview = PreviewPanel()
+        self.preview = PreviewPanel(self.run_preview_program)
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.problems, "Problemas")
         self.bottom_tabs.addTab(self.result_output, "Resultado")
@@ -93,37 +95,55 @@ class MainWindow(QMainWindow):
         self.explorer.new_requested.connect(self.new_file)
 
     def _build_actions(self) -> None:
-        toolbar = QToolBar("Principal")
-        self.addToolBar(toolbar)
-        actions = [
-            ("Nuevo", "Ctrl+N", self.new_file),
-            ("Abrir", "Ctrl+O", self.open_file),
-            ("Guardar", "Ctrl+S", self.save_file),
-            ("Guardar como", "Ctrl+Shift+S", self.save_file_as),
-            ("Analizar", "F5", self.analyze_program),
-            ("Ejecutar", "F6", self.run_program),
-            ("Consola", "F8", self.show_console),
-            ("Vista previa", "F7", self.show_preview),
-            ("Limpiar", "Ctrl+L", self.clear_results),
-            ("Configuracion", "", self.show_settings),
-            ("Salir", "", self.close),
-        ]
-        for text, shortcut, callback in actions:
-            action = QAction(text, self)
-            if shortcut:
-                action.setShortcut(QKeySequence(shortcut))
-            action.triggered.connect(callback)
-            toolbar.addAction(action)
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("Archivo")
+        file_menu.addAction(self._menu_action("Nuevo archivo", "Ctrl+N", self.new_file))
+        file_menu.addAction(self._menu_action("Abrir archivo", "Ctrl+O", self.open_file))
+        file_menu.addSeparator()
+        file_menu.addAction(self._menu_action("Guardar", "Ctrl+S", self.save_file))
+        file_menu.addAction(self._menu_action("Guardar como", "Ctrl+Shift+S", self.save_file_as))
+        file_menu.addSeparator()
+        file_menu.addAction(self._menu_action("Salir", "", self.close))
+
+        edit_menu = menu_bar.addMenu("Editar")
+        edit_menu.addAction(self._menu_action("Limpiar resultados", "Ctrl+L", self.clear_results))
+        edit_menu.addAction(self._menu_action("Cambiar tamano de fuente", "", self.change_font_size))
+
+        view_menu = menu_bar.addMenu("Ver")
+        view_menu.addAction(self._menu_action("Mostrar vista previa", "F7", self.show_preview))
+        view_menu.addAction(self._menu_action("Mostrar tabla de simbolos", "", lambda: self.bottom_tabs.setCurrentWidget(self.symbols)))
+        view_menu.addSeparator()
+        view_menu.addAction(self._menu_action("Mostrar u ocultar chat", "Ctrl+Shift+C", lambda: self.chat.setVisible(not self.chat.isVisible())))
+        view_menu.addAction(self._menu_action("Mostrar u ocultar explorador", "Ctrl+B", lambda: self.explorer.setVisible(not self.explorer.isVisible())))
+        view_menu.addAction(self._menu_action("Mostrar u ocultar panel inferior", "Ctrl+J", lambda: self.bottom_tabs.setVisible(not self.bottom_tabs.isVisible())))
+
+        run_menu = menu_bar.addMenu("Ejecutar")
+        run_menu.addAction(self._menu_action("Analizar", "F5", self.analyze_program))
+        run_menu.addAction(self._menu_action("Ejecutar programa", "F6", self.run_program))
+        run_menu.addAction(self._menu_action("Traducir codigo", "F9", self.translate_code))
+
+        terminal_menu = menu_bar.addMenu("Terminal")
+        terminal_menu.addAction(self._menu_action("Mostrar consola", "F8", self.show_console))
+        terminal_menu.addAction(self._menu_action("Ejecutar en consola", "", self.run_program))
+
+        help_menu = menu_bar.addMenu("Ayuda")
+        help_menu.addAction(self._menu_action("Configuracion", "", self.show_settings))
+        help_menu.addAction(self._menu_action("Explicar error seleccionado con IA", "", self.chat.explain_selected_error))
+
         self._shortcut("Ctrl+Shift+P", self.open_palette)
-        self._shortcut("Ctrl+Shift+C", self.chat.input.setFocus)
-        self._shortcut("Ctrl+B", lambda: self.explorer.setVisible(not self.explorer.isVisible()))
-        self._shortcut("Ctrl+J", lambda: self.bottom_tabs.setVisible(not self.bottom_tabs.isVisible()))
         self.palette = CommandPalette([
             "Nuevo archivo", "Abrir archivo", "Guardar archivo", "Analizar programa", "Ejecutar programa",
-            "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
+            "Traducir codigo", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
             "Mostrar u ocultar chat", "Mostrar u ocultar explorador", "Cambiar tamano de fuente",
         ], self)
         self.palette.command_selected.connect(self.execute_palette_command)
+
+    def _menu_action(self, text: str, shortcut: str, callback) -> QAction:
+        action = QAction(text, self)
+        if shortcut:
+            action.setShortcut(QKeySequence(shortcut))
+        action.triggered.connect(callback)
+        return action
 
     def _shortcut(self, keys: str, callback) -> None:
         action = QAction(self)
@@ -133,12 +153,12 @@ class MainWindow(QMainWindow):
 
     def new_file(self) -> None:
         editor = CodeEditor()
-        editor.setPlainText('DEFINIR edad COMO ENTERO = 25\nCAMBIAR edad A edad + 1\nMOSTRAR edad')
+        editor.setPlainText('print("Hola desde Python low-code")')
         editor.cursor_position.connect(lambda line, col: self.status_pos.setText(f"Linea {line}, Columna {col}"))
-        self.editor_tabs.addTab(editor, "sin_titulo.miezee")
+        self.editor_tabs.addTab(editor, "sin_titulo.py")
         self.editor_tabs.setCurrentWidget(editor)
         self.current_path = None
-        self.status_file.setText("sin_titulo.miezee")
+        self.status_file.setText("sin_titulo.py")
 
     def current_editor(self) -> CodeEditor:
         return self.editor_tabs.currentWidget()
@@ -156,7 +176,7 @@ class MainWindow(QMainWindow):
         self.analyze_program()
 
     def open_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Abrir archivo Miezee", str(self.root), "Miezee (*.miezee);;Todos (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Abrir archivo Python", str(self.root), "Python (*.py);;Todos (*.*)")
         if path:
             self.open_path(path)
 
@@ -178,31 +198,42 @@ class MainWindow(QMainWindow):
         self.status_file.setText(self.current_path.name)
 
     def save_file_as(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", str(self.root / "programa.miezee"), "Miezee (*.miezee)")
+        path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", str(self.root / "programa.py"), "Python (*.py);;Todos (*.*)")
         if path:
             self.current_path = Path(path)
             FileService.write(path, self.current_text())
             self.editor_tabs.setTabText(self.editor_tabs.currentIndex(), Path(path).name)
             self.explorer.refresh()
 
-    def analyze_program(self) -> None:
+    def analyze_program(self, auto_select: bool = True) -> None:
         self.last_result = self.analyzer.analyze(self.current_text())
         self.problems.set_errors(self.last_result.errors)
         self.symbols.set_symbols(self.last_result.symbol_table.all())
-        self.preview.set_screen(self.last_result.ui_screen)
+        self.preview.set_python_source(self.current_text(), self.last_result.ok)
         self.current_editor().mark_error_lines([err.line for err in self.last_result.errors])
         self.status_errors.setText(f"Errores: {len(self.last_result.errors)}")
         self.status_analyzer.setText("Analizador: correcto" if self.last_result.ok else "Analizador: con errores")
         self.result_output.setPlainText(self._result_text(self.last_result))
         self.console_output.set_text(self._console_text(self.last_result))
+        if not auto_select:
+            return
         if self.last_result.errors:
             self.bottom_tabs.setCurrentWidget(self.problems)
-        elif self.last_result.ui_screen.exists and self.last_result.ui_screen.visible:
-            self.show_preview()
+        elif self.preview.has_python_gui(self.current_text()):
+            self.select_preview_tab()
         else:
             self.bottom_tabs.setCurrentWidget(self.result_output)
 
     def show_preview(self) -> None:
+        self.analyze_program(auto_select=False)
+        self.select_preview_tab()
+        if self.last_result and self.last_result.errors:
+            self.bottom_tabs.setCurrentWidget(self.problems)
+            return
+        if self.preview.has_python_gui(self.current_text()):
+            self.start_preview_process()
+
+    def select_preview_tab(self) -> None:
         self.bottom_tabs.setVisible(True)
         self.bottom_tabs.setCurrentWidget(self.preview)
 
@@ -216,43 +247,150 @@ class MainWindow(QMainWindow):
         if self.last_result and self.last_result.errors:
             self.console_output.append_output("No se puede ejecutar: corrige los errores semanticos primero.")
             return
-        self.program_session = ProgramSession(self.current_text())
-        self.console_output.append_output(self.program_session.start())
-        if not self.program_session.waiting_input:
-            self.program_session = None
+        self.start_python_process()
 
-    def _result_text(self, result: AnalysisResult) -> str:
-        lines = ["Entrada:", result.source, "", "Estado final:", "Correcto" if result.ok else "Con errores", "", "Reglas aplicadas:"]
+    def run_preview_program(self) -> None:
+        self.analyze_program(auto_select=False)
+        if self.last_result and self.last_result.errors:
+            self.bottom_tabs.setCurrentWidget(self.problems)
+            return
+        self.select_preview_tab()
+        self.start_preview_process()
+
+    def start_python_process(self) -> None:
+        if self.python_process and self.python_process.state() != QProcess.NotRunning:
+            self.python_process.kill()
+            self.python_process.waitForFinished(1000)
+        source = self.prepare_source_for_execution(self.current_text())
+        self.console_output.clear()
+        self.console_output.set_running_header("codigo actual")
+        self.python_process = QProcess(self)
+        self.python_process.setWorkingDirectory(str(self.root))
+        self.python_process.setProcessChannelMode(QProcess.SeparateChannels)
+        environment = QProcessEnvironment.systemEnvironment()
+        environment.insert("PYTHONUNBUFFERED", "1")
+        environment.insert("PYTHONIOENCODING", "utf-8")
+        environment.insert("PYTHONUTF8", "1")
+        self.python_process.setProcessEnvironment(environment)
+        self.python_process.readyReadStandardOutput.connect(self.read_python_stdout)
+        self.python_process.readyReadStandardError.connect(self.read_python_stderr)
+        self.python_process.finished.connect(self.python_process_finished)
+        self.python_process.start(sys.executable, ["-u", "-c", source])
+        if not self.python_process.waitForStarted(1000):
+            self.console_output.append_output("No se pudo iniciar Python.")
+
+    def start_preview_process(self) -> None:
+        source = self.prepare_source_for_execution(self.current_text())
+        self.console_output.clear()
+        self.console_output.append_output("> Abriendo vista previa\n")
+        started = QProcess.startDetached(sys.executable, ["-u", "-c", source], str(self.root))
+        if isinstance(started, tuple):
+            started = bool(started[0])
+        if not started:
+            self.console_output.append_output("No se pudo abrir la vista previa. Revisa que Python pueda ejecutar ventanas tkinter/PySide6.")
+
+    def cleanup_workspace_temp_files(self) -> None:
+        for file_name in (".miezee_run_tmp.py", ".miezee_preview_tmp.py"):
+            path = self.root / file_name
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                pass
+
+    def read_python_stdout(self) -> None:
+        if not self.python_process:
+            return
+        text = self.decode_process_text(bytes(self.python_process.readAllStandardOutput()))
+        self.console_output.append_process_output(text)
+
+    def read_python_stderr(self) -> None:
+        if not self.python_process:
+            return
+        text = self.decode_process_text(bytes(self.python_process.readAllStandardError()))
+        self.console_output.append_process_output(text)
+
+    def python_process_finished(self, exit_code: int, _exit_status) -> None:
+        self.console_output.append_output(f"\n[Proceso finalizado con codigo {exit_code}]")
+
+    def decode_process_text(self, data: bytes) -> str:
+        for encoding in ("utf-8", "cp1252", "latin-1"):
+            try:
+                return data.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return data.decode("utf-8", errors="replace")
+
+    def prepare_source_for_execution(self, source: str) -> str:
+        if not self.preview.has_python_gui(source):
+            return source
+        lowered = source.lower()
+        if "tkinter" in lowered or "customtkinter" in lowered:
+            if ".mainloop(" not in lowered:
+                root_name = self._find_gui_app_variable(source, {"Tk", "tk.Tk", "tkinter.Tk", "CTk", "ctk.CTk", "customtkinter.CTk"})
+                if root_name:
+                    return source.rstrip() + f"\n\n# Arranque automatico de vista previa Miezee\n{root_name}.mainloop()\n"
+        if "pyside6" in lowered and ".exec(" not in lowered:
+            app_name = self._find_gui_app_variable(source, {"QApplication"})
+            if app_name:
+                return source.rstrip() + f"\n\n# Arranque automatico de vista previa Miezee\n{app_name}.exec()\n"
+        return source
+
+    def _find_gui_app_variable(self, source: str, call_names: set[str]) -> str:
+        try:
+            tree = ast.parse(source or "\n")
+        except SyntaxError:
+            return ""
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                continue
+            if self._ast_call_name(node.value.func) not in call_names:
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    return target.id
+        return ""
+
+    def _ast_call_name(self, func) -> str:
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            parent = self._ast_call_name(func.value)
+            return f"{parent}.{func.attr}" if parent else func.attr
+        return ""
+
+    def translate_code(self) -> None:
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.result_output)
+        self.result_output.setPlainText("Traduccion aproximada a Miezee:\n\n" + self.translator.translate(self.current_text()))
+
+    def _result_text(self, result: PythonAnalysisResult) -> str:
+        lines = ["Entrada Python:", result.source, "", "Estado final:", "Correcto" if result.ok else "Con errores", "", "Reglas aplicadas:"]
         lines.extend(result.rules_applied or ["Sin reglas aplicadas"])
         if result.errors:
             lines.append("\nErrores encontrados:")
             lines.extend(f"{err.code} linea {err.line}: {err.explanation}" for err in result.errors)
         return "\n".join(lines)
 
-    def _console_text(self, result: AnalysisResult) -> str:
+    def _console_text(self, result: PythonAnalysisResult) -> str:
         lines = [
-            "Miezee Console",
+            "Python Console",
             "==============",
             f"Estado: {'correcto' if result.ok else 'con errores'}",
             f"Errores: {len(result.errors)}",
         ]
         if result.rules_applied:
             lines.append("Reglas aplicadas: " + ", ".join(result.rules_applied))
-        function_symbols = [symbol for symbol in result.symbol_table.all() if symbol.initial_value == "funcion"]
-        parameter_symbols = [symbol for symbol in result.symbol_table.all() if symbol.initial_value.startswith("parametro de ")]
+        symbols = result.symbol_table.all()
+        function_symbols = [symbol for symbol in symbols if symbol.initial_value == "funcion python"]
+        if symbols:
+            lines.append("")
+            lines.append("Simbolos detectados:")
+            for symbol in symbols:
+                lines.append(f"- {symbol.name}: {symbol.data_type.value} ({symbol.initial_value}, linea {symbol.declared_line})")
         if function_symbols:
             lines.append("")
-            lines.append("Funciones detectadas:")
-            for symbol in function_symbols:
-                lines.append(f"- {symbol.name} retorna {symbol.data_type.value} (linea {symbol.declared_line})")
-                params = [param for param in parameter_symbols if param.initial_value == f"parametro de {symbol.name}"]
-                for param in params:
-                    lines.append(f"  parametro {param.name}: {param.data_type.value}")
-        return_lines = [line.strip() for line in result.source.splitlines() if line.strip().upper().startswith("RETORNAR ")]
-        if return_lines:
-            lines.append("")
-            lines.append("Retornos encontrados:")
-            lines.extend(f"- {line}" for line in return_lines)
+            lines.append("Funciones Python detectadas: " + ", ".join(symbol.name for symbol in function_symbols))
         if result.errors:
             lines.append("")
             lines.append("Errores:")
@@ -260,12 +398,15 @@ class MainWindow(QMainWindow):
         return "\n".join(lines)
 
     def clear_results(self) -> None:
+        if self.python_process and self.python_process.state() != QProcess.NotRunning:
+            self.python_process.kill()
+            self.python_process.waitForFinished(1000)
         self.last_result = None
         self.console_output.clear()
         self.result_output.clear()
         self.problems.set_errors([])
         self.symbols.set_symbols([])
-        self.preview.set_screen(UIScreen())
+        self.preview.set_python_source("", False)
         editor = self.current_editor()
         if editor:
             editor.mark_error_lines([])
@@ -294,6 +435,7 @@ class MainWindow(QMainWindow):
             "Guardar archivo": self.save_file,
             "Analizar programa": self.analyze_program,
             "Ejecutar programa": self.run_program,
+            "Traducir codigo": self.translate_code,
             "Mostrar consola": self.show_console,
             "Mostrar vista previa": self.show_preview,
             "Mostrar tabla de simbolos": lambda: self.bottom_tabs.setCurrentWidget(self.symbols),
@@ -306,10 +448,8 @@ class MainWindow(QMainWindow):
         mapping[command]()
 
     def execute_console_command(self, command: str) -> None:
-        if self.program_session and self.program_session.waiting_input:
-            self.console_output.append_output(self.program_session.submit(command))
-            if not self.program_session.waiting_input:
-                self.program_session = None
+        if self.python_process and self.python_process.state() != QProcess.NotRunning:
+            self.python_process.write((command + "\n").encode("utf-8"))
             return
         if command.strip().lower() in {"ejecutar", "run"}:
             self.run_program()
@@ -319,8 +459,7 @@ class MainWindow(QMainWindow):
         if self.last_result and self.last_result.errors:
             self.console_output.append_output("No se puede ejecutar: corrige los errores semanticos primero.")
             return
-        result = FunctionExecutor(self.current_text()).execute_command(command)
-        self.console_output.append_output(result)
+        self.console_output.append_output("Escribe 'ejecutar' para correr el programa Python actual.")
 
     def change_font_size(self) -> None:
         size, ok = QInputDialog.getInt(self, "Tamano de fuente", "Tamano:", self.current_editor().font().pointSize(), 8, 28)

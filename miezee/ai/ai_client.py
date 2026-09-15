@@ -7,8 +7,9 @@ from miezee.services.settings_service import SettingsService
 
 
 OFFLINE_MESSAGE = (
-    "Modelo local no disponible. El analizador semantico continua disponible, "
-    "pero el chat de IA para Miezee, programacion general e investigacion esta desactivado"
+    "Bienvenido a Miezee IDE.\n"
+    "Puedes pedirme que cree programas en Python, interfaces, menus, archivos o bases de datos.\n"
+    "El analisis local y la consola estan disponibles aunque la IA local no este conectada."
 )
 
 

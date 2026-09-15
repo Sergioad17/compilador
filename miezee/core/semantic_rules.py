@@ -62,6 +62,7 @@ RULES = {
     "RT05": "BOOLEANO Y/O BOOLEANO produce BOOLEANO. NO BOOLEANO produce BOOLEANO.",
     "RT06": "ARCHIVO y FECHA no pueden utilizarse en operaciones aritmeticas.",
     "RT07": "Los tipos enteros byte, short, int y long tienen rangos definidos.",
+    "RT08": "sqrt(valor) requiere exactamente un argumento numerico y produce DOUBLE.",
     "RI01": "El identificador debe declararse antes de utilizarse.",
     "RI02": "No se puede declarar dos veces el mismo identificador.",
     "RI03": "Las palabras reservadas no pueden utilizarse como identificadores.",

@@ -2,6 +2,7 @@ import csv
 import html
 import json
 from pathlib import Path
+from collections.abc import Callable
 
 from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
@@ -10,22 +11,37 @@ from miezee.core.ui_model import UIButton, UIScreen
 
 
 class PreviewPanel(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, run_preview_callback: Callable[[], None] | None = None) -> None:
         super().__init__()
         self.layout = QVBoxLayout(self)
         self.inputs: dict[str, QLineEdit] = {}
         self.current_screen = UIScreen()
         self.output_dir = Path.cwd() / "outputs"
-        self.placeholder = QLabel("Ejecuta un programa con CREAR PANTALLA para ver la vista previa.")
+        self.run_preview_callback = run_preview_callback
+        self.placeholder = QLabel("Analiza un programa Python con interfaz para ver la vista previa.")
         self.layout.addWidget(self.placeholder)
         self.layout.addStretch()
+
+    def set_python_source(self, source: str, can_run: bool) -> None:
+        self._clear()
+        self.inputs = {}
+        self.current_screen = UIScreen()
+        if self.has_python_gui(source):
+            self._show_python_gui_preview(can_run)
+            return
+
+        self._add_message(
+            "No hay interfaz visual detectada.",
+            "Para usar Vista previa, genera una pantalla, ventana, formulario o menu. "
+            "Los programas de consola se prueban desde Ejecutar."
+        )
 
     def set_screen(self, screen: UIScreen) -> None:
         self._clear()
         self.inputs = {}
         self.current_screen = screen
         if not screen.exists or not screen.visible:
-            self.layout.addWidget(QLabel("No hay pantalla visible. Usa CREAR PANTALLA y MOSTRAR PANTALLA."))
+            self.layout.addWidget(QLabel("No hay pantalla visible."))
             self.layout.addStretch()
             return
 
@@ -97,6 +113,50 @@ class PreviewPanel(QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+
+    def _show_python_gui_preview(self, can_run: bool) -> None:
+        title = QLabel("Interfaz Python detectada")
+        title.setStyleSheet("font-size: 18px; font-weight: 600; padding: 8px 0;")
+        self.layout.addWidget(title)
+        self._add_message(
+            "Vista previa lista.",
+            "Presiona Abrir vista previa para mostrar la pantalla como una ventana real de Python."
+        )
+        button = QPushButton("Abrir vista previa")
+        button.setEnabled(can_run and self.run_preview_callback is not None)
+        if not can_run:
+            button.setToolTip("Corrige los errores antes de abrir la vista previa.")
+        elif self.run_preview_callback:
+            button.clicked.connect(self.run_preview_callback)
+        self.layout.addWidget(button)
+        self.layout.addStretch()
+
+    def _add_message(self, title: str, body: str) -> None:
+        title_label = QLabel(title)
+        title_label.setStyleSheet("font-weight: 600; padding-top: 8px;")
+        body_label = QLabel(body)
+        body_label.setWordWrap(True)
+        body_label.setStyleSheet("color: #c8d0d8; padding-bottom: 8px;")
+        self.layout.addWidget(title_label)
+        self.layout.addWidget(body_label)
+
+    def has_python_gui(self, source: str) -> bool:
+        lowered = source.lower()
+        markers = (
+            "import tkinter",
+            "from tkinter",
+            "customtkinter",
+            "from pyside6",
+            "import pyside6",
+            "tk.tk(",
+            "ctk.",
+            "qapplication(",
+            "qmainwindow(",
+            "qwidget(",
+            ".mainloop(",
+            ".exec(",
+        )
+        return any(marker in lowered for marker in markers)
 
     def _placeholder_for_type(self, data_type: DataType) -> str:
         placeholders = {
