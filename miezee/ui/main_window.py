@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.current_path: Path | None = None
         self.python_process: QProcess | None = None
         self.cleanup_workspace_temp_files()
-        self.setWindowTitle("Miezee IDE - Python Low Code")
+        self.setWindowTitle("Miezee IDE")
         self.resize(1360, 820)
         self._build_ui()
         self._build_actions()
