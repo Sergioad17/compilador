@@ -394,8 +394,19 @@ MOSTRAR area
 - `miezee/ai/system_prompt.py`: instrucciones base para la IA local.
 - `miezee/services/settings_service.py`: carga de `.env`.
 - `miezee/services/file_service.py`: lectura y escritura de archivos.
-- `examples/`: ejemplos heredados de Miezee.
+- `examples/`: casos de prueba Python renovados, de 10 a 15 lineas cada uno.
 - `tests/`: pruebas unitarias.
+
+## Casos de prueba incluidos
+
+Los ejemplos principales del proyecto estan en Python:
+
+- `examples/correcto_consola.py`: programa interactivo con calculos numericos.
+- `examples/correcto_funciones.py`: funcion con parametros, retorno y salida.
+- `examples/pantalla_empleados.py`: pantalla sencilla con `tkinter`.
+- `examples/error_importacion.py`: caso invalido por importacion no permitida.
+- `examples/error_llamada_peligrosa.py`: caso invalido por uso de `eval`.
+- `examples/error_sintaxis.py`: caso invalido por sintaxis Python incorrecta.
 
 ## Archivos temporales
 

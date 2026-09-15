@@ -37,6 +37,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.root = Path.cwd()
+        self.project_root = self.root / "examples"
         self.analyzer = PythonAnalyzer()
         self.translator = PythonToMiezeeTranslator()
         self.last_result: PythonAnalysisResult | None = None
@@ -50,7 +51,7 @@ class MainWindow(QMainWindow):
         self.new_file()
 
     def _build_ui(self) -> None:
-        self.explorer = ExplorerPanel(self.root)
+        self.explorer = ExplorerPanel(self.project_root)
         self.editor_tabs = QTabWidget()
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.tabCloseRequested.connect(self.editor_tabs.removeTab)
@@ -99,6 +100,7 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("Archivo")
         file_menu.addAction(self._menu_action("Nuevo archivo", "Ctrl+N", self.new_file))
         file_menu.addAction(self._menu_action("Abrir archivo", "Ctrl+O", self.open_file))
+        file_menu.addAction(self._menu_action("Abrir carpeta", "Ctrl+K", self.open_folder))
         file_menu.addSeparator()
         file_menu.addAction(self._menu_action("Guardar", "Ctrl+S", self.save_file))
         file_menu.addAction(self._menu_action("Guardar como", "Ctrl+Shift+S", self.save_file_as))
@@ -132,7 +134,7 @@ class MainWindow(QMainWindow):
 
         self._shortcut("Ctrl+Shift+P", self.open_palette)
         self.palette = CommandPalette([
-            "Nuevo archivo", "Abrir archivo", "Guardar archivo", "Analizar programa", "Ejecutar programa",
+            "Nuevo archivo", "Abrir archivo", "Abrir carpeta", "Guardar archivo", "Analizar programa", "Ejecutar programa",
             "Traducir codigo", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
             "Mostrar u ocultar chat", "Mostrar u ocultar explorador", "Cambiar tamano de fuente",
         ], self)
@@ -176,9 +178,25 @@ class MainWindow(QMainWindow):
         self.analyze_program()
 
     def open_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Abrir archivo Python", str(self.root), "Python (*.py);;Todos (*.*)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir archivo",
+            str(self.project_root if self.project_root.exists() else self.root),
+            "Archivos soportados (*.py *.miezee *.txt *.md *.json *.csv *.rtf);;Python (*.py);;Todos (*.*)",
+        )
         if path:
             self.open_path(path)
+
+    def open_folder(self) -> None:
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Abrir carpeta de trabajo",
+            str(self.project_root if self.project_root.exists() else self.root),
+        )
+        if not path:
+            return
+        self.project_root = Path(path)
+        self.explorer.set_root(self.project_root)
 
     def open_path(self, path: str) -> None:
         editor = CodeEditor()
@@ -198,7 +216,8 @@ class MainWindow(QMainWindow):
         self.status_file.setText(self.current_path.name)
 
     def save_file_as(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", str(self.root / "programa.py"), "Python (*.py);;Todos (*.*)")
+        base_dir = self.project_root if self.project_root.exists() else self.root
+        path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", str(base_dir / "programa.py"), "Python (*.py);;Todos (*.*)")
         if path:
             self.current_path = Path(path)
             FileService.write(path, self.current_text())
@@ -265,7 +284,7 @@ class MainWindow(QMainWindow):
         self.console_output.clear()
         self.console_output.set_running_header("codigo actual")
         self.python_process = QProcess(self)
-        self.python_process.setWorkingDirectory(str(self.root))
+        self.python_process.setWorkingDirectory(str(self.execution_root()))
         self.python_process.setProcessChannelMode(QProcess.SeparateChannels)
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONUNBUFFERED", "1")
@@ -283,7 +302,7 @@ class MainWindow(QMainWindow):
         source = self.prepare_source_for_execution(self.current_text())
         self.console_output.clear()
         self.console_output.append_output("> Abriendo vista previa\n")
-        started = QProcess.startDetached(sys.executable, ["-u", "-c", source], str(self.root))
+        started = QProcess.startDetached(sys.executable, ["-u", "-c", source], str(self.execution_root()))
         if isinstance(started, tuple):
             started = bool(started[0])
         if not started:
@@ -297,6 +316,13 @@ class MainWindow(QMainWindow):
                     path.unlink()
             except OSError:
                 pass
+
+    def execution_root(self) -> Path:
+        if self.current_path:
+            return self.current_path.parent
+        if self.project_root.exists():
+            return self.project_root
+        return self.root
 
     def read_python_stdout(self) -> None:
         if not self.python_process:
@@ -432,6 +458,7 @@ class MainWindow(QMainWindow):
         mapping = {
             "Nuevo archivo": self.new_file,
             "Abrir archivo": self.open_file,
+            "Abrir carpeta": self.open_folder,
             "Guardar archivo": self.save_file,
             "Analizar programa": self.analyze_program,
             "Ejecutar programa": self.run_program,

@@ -1,4 +1,0 @@
-DEFINIR sueldo COMO DECIMAL = 8500.50
-DEFINIR bono COMO ENTERO = 500
-CAMBIAR sueldo A sueldo + bono
-MOSTRAR sueldo
