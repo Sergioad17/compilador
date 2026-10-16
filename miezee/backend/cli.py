@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from miezee.backend.contract import analyze_lexical_python, analyze_python, analyze_semantic_python, analyze_syntax_python, generate_intermediate_python, run_python, translate_python_to_miezee
 from miezee.backend.chat_service import chat, status
+from miezee.backend.attachment_service import extract_attachments
 from miezee.services.settings_service import SettingsService
 
 
@@ -20,6 +21,7 @@ COMMANDS: dict[str, Callable[[str], dict[str, Any]]] = {
     "intermediate": generate_intermediate_python,
     "run": run_python,
     "chat": lambda source: chat(json.loads(source)),
+    "attachments": lambda source: extract_attachments(json.loads(source)),
     "status": lambda source: status(json.loads(source)),
     "settings": lambda source: {"url": SettingsService.load().ollama_url, "model": SettingsService.load().ollama_model},
     "prepare": lambda source: {"source": prepare_source(source)},

@@ -17,6 +17,7 @@ fn main() {
             runtime::program_input,
             runtime::stop_program,
             files::open_file,
+            files::attach_chat_files,
             files::open_folder,
             files::read_file,
             files::save_file,

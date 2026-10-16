@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { ChatMessage, Preferences } from "../models/ide";
+import type { ChatAttachment, ChatMessage, Preferences } from "../models/ide";
 import { backend } from "../services/backend";
 
 export const chatCommands = [
@@ -34,19 +34,19 @@ export function useChatController(options: {
   const [busy, setBusy] = useState(false);
   const requestId = useRef(0);
   const nativeId = useRef<string>();
-  const add = (role: ChatMessage["role"], text: string) =>
-    setMessages((items) => [...items, { role, text }]);
-  async function send(message: string) {
+  const add = (role: ChatMessage["role"], text: string, attachments?: string[]) =>
+    setMessages((items) => [...items, { role, text, attachments }]);
+  async function send(message: string, attachments: ChatAttachment[] = []) {
     if (busy || !message.trim()) return;
     if (message.toLowerCase() === "/limpiar") {
       setMessages([]);
       return;
     }
-    add("user", message);
+    add("user", message, attachments.map((item) => item.name));
     const token = ++requestId.current;
     setBusy(true);
     try {
-      const local = await options.local(message);
+      const local = attachments.length ? null : await options.local(message);
       if (token !== requestId.current) return;
       if (local !== null) {
         add("assistant", local);
@@ -56,7 +56,7 @@ export function useChatController(options: {
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
-      const mode =
+      let mode =
         /^\/explicar\b|^\s*(explica|que hace|como funciona|que es)\b/.test(
           lower,
         )
@@ -82,6 +82,13 @@ export function useChatController(options: {
                     ? "pantalla"
                     : "programa"
                   : "chat";
+      if (
+        attachments.length > 0 &&
+        mode !== "chat" &&
+        !/\/generar|\/corregir|\/arreglar|\/ajustar|codigo|programa|pantalla|interfaz|funcion|menu|script|aplicacion/.test(lower)
+      ) {
+        mode = "chat";
+      }
       nativeId.current = crypto.randomUUID();
       const result = await backend.chat(
         {
@@ -92,6 +99,7 @@ export function useChatController(options: {
             url: options.preferences.url,
             model: options.preferences.model,
           },
+          attachments,
         },
         nativeId.current,
       );
@@ -117,6 +125,7 @@ export function useChatController(options: {
     messages,
     busy,
     send,
+    attachFiles: (paths?: string[]) => backend.attachChatFiles(paths),
     clear: () => setMessages([]),
     stop: () => {
       requestId.current++;

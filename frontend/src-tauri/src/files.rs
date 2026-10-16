@@ -57,6 +57,40 @@ pub async fn open_file(state: tauri::State<'_, Files>) -> Result<Option<Value>, 
     }
     Ok(None)
 }
+
+#[tauri::command]
+pub async fn attach_chat_files(paths: Option<Vec<String>>) -> Result<Value, String> {
+    let selected = if let Some(paths) = paths {
+        paths.into_iter().map(PathBuf::from).collect::<Vec<_>>()
+    } else {
+        rfd::AsyncFileDialog::new()
+            .set_title("Adjuntar archivos al asistente")
+            .add_filter(
+                "Documentos e imagenes",
+                &[
+                    "txt", "md", "csv", "tsv", "json", "jsonl", "rtf", "html", "htm", "xml",
+                    "yaml", "yml", "log", "py", "miezee", "sql", "ini", "cfg", "toml", "docx",
+                    "xlsx", "pptx", "odt", "ods", "odp", "pdf", "png", "jpg", "jpeg", "webp",
+                ],
+            )
+            .pick_files()
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|file| file.path().to_owned())
+            .collect()
+    };
+    if selected.is_empty() {
+        return Ok(json!({"attachments": [], "errors": []}));
+    }
+    let payload = json!({
+        "paths": selected.iter().map(|path| path.to_string_lossy().into_owned()).collect::<Vec<_>>()
+    })
+    .to_string();
+    tauri::async_runtime::spawn_blocking(move || services::python("attachments", &payload))
+        .await
+        .map_err(|error| error.to_string())?
+}
 #[tauri::command]
 pub async fn open_folder(state: tauri::State<'_, Files>) -> Result<Option<String>, String> {
     if let Some(folder) = rfd::AsyncFileDialog::new().pick_folder().await {

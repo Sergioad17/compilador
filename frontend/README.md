@@ -52,6 +52,7 @@ Se integraron tambien:
 - Consola interactiva con input(), salida UTF-8, detener y limpiar.
 - Vista previa en un proceso independiente, con errores visibles y arranque de GUI.
 - Chat Ollama, comandos con slash y sugerencias, generacion y correccion al editor.
+- Adjuntos en el chat por selector o arrastre, con extraccion local de documentos y soporte de imagenes para modelos con vision.
 - Burbujas diferenciadas y Markdown, incluyendo negrita, cursiva, subrayado y tachado.
 - Temas Default/Morado y sus iconos, fuente configurable y preferencias locales.
 - Menus Archivo/Editar/Ver/Ejecutar/Terminal/Ayuda, atajos y paleta de comandos.

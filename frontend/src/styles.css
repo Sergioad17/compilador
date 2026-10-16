@@ -627,6 +627,25 @@ aside.assistant {
   color: #aaaaaa;
   font-size: 10px;
 }
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.message-attachments span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #202020;
+  color: #cfcfcf;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
 .bubble p {
   margin: 7px 0 0;
 }
@@ -716,13 +735,67 @@ aside.assistant {
   border-radius: 6px;
   background: #1c1c1c;
 }
-.chat-composer textarea {
+.chat-composer.dragging {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.composer-content {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-composer textarea {
   width: 100%;
   min-height: 52px;
   max-height: 130px;
   border: 0;
   resize: vertical;
+}
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px 7px 0;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 4px 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2c2c2c;
+  color: #d4d4d4;
+  font-size: 10px;
+}
+.attachment-chip > span {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-chip button {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.attachment-error {
+  margin: 6px 7px 0;
+  color: #e6a19b;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+.chat-composer .attach-button {
+  margin-right: 0;
 }
 .chat-composer button {
   align-self: flex-end;

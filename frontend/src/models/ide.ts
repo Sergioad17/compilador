@@ -90,6 +90,16 @@ export type Panel =
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
+  attachments?: string[];
+}
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  kind: "text" | "image";
+  mediaType: string;
+  content: string;
+  size: number;
+  truncated: boolean;
 }
 export interface Preferences {
   theme: "Default" | "Morado";

@@ -623,8 +623,8 @@ export function App() {
           </header>
           <ChatView
             {...ide.chat}
-            send={(text) => {
-              void ide.chat.send(text);
+            send={(text, attachments) => {
+              void ide.chat.send(text, attachments);
             }}
             explain={explain}
           />

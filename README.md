@@ -189,7 +189,10 @@ Puede:
 - generar funciones;
 - generar interfaces;
 - adaptar el codigo abierto en el editor;
+- leer documentos adjuntos y usarlos como contexto de la solicitud;
 - enviar el codigo generado directamente al editor.
+
+El boton de clip y el arrastre permiten adjuntar hasta cinco archivos por consulta. Se admite texto, Markdown, CSV/TSV, JSON, RTF, HTML, XML, YAML, codigo, DOCX, XLSX, PPTX, OpenDocument y PDF. PNG, JPEG y WebP se envian a Ollama para modelos con vision. Adjuntar no ejecuta una accion por si mismo: el usuario debe indicar que desea analizar, resumir, comparar, extraer o generar a partir del contenido.
 
 Cuando la IA genera codigo, el chat no debe pegar todo el codigo como respuesta principal. Debe colocarlo en el editor y mostrar un mensaje breve de confirmacion.
 

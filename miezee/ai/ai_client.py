@@ -26,23 +26,26 @@ class AIClient:
     def status(self) -> str:
         return "Ejecutando localmente" if self.available else "Local no disponible"
 
-    def ask(self, message: str) -> str:
+    def ask(self, message: str, images: list[str] | None = None) -> str:
         if not self.available:
             return OFFLINE_MESSAGE
         try:
-            return self._ask_ollama(message)
+            return self._ask_ollama(message, images or [])
         except (HTTPError, URLError, TimeoutError, ConnectionError) as exc:
             return f"Error de API: {self._friendly_error(exc)}"
         except Exception as exc:
             return f"Error local: {self._friendly_error(exc)}"
 
-    def _ask_ollama(self, message: str) -> str:
+    def _ask_ollama(self, message: str, images: list[str]) -> str:
+        user_message = {"role": "user", "content": message}
+        if images:
+            user_message["images"] = images
         payload = {
             "model": self.settings.ollama_model,
             "stream": False,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": message},
+                user_message,
             ],
             "options": {
                 "temperature": 0.4,
@@ -63,6 +66,8 @@ class AIClient:
                 "num_predict": 700,
             },
         }
+        if images:
+            generate_payload["images"] = images
         data = self._post_ollama("/api/generate", generate_payload)
         text = self._extract_text(data)
         if text:
@@ -97,6 +102,8 @@ class AIClient:
 
     def _friendly_error(self, exc: Exception) -> str:
         text = str(exc)
+        if "image" in text.lower() and ("support" in text.lower() or "vision" in text.lower()):
+            return "El modelo configurado no admite imagenes. Usa un modelo de vision en Ollama o adjunta un documento de texto."
         if "connection refused" in text.lower() or "actively refused" in text.lower() or "10061" in text:
             return "Ollama no esta corriendo. Abre Ollama o ejecuta ollama serve."
         if "404" in text:

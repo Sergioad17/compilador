@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Analysis, Document, IntermediateCode } from "../models/ide";
+import type { Analysis, ChatAttachment, Document, IntermediateCode } from "../models/ide";
 
 export async function request<T>(
   command: string,
@@ -62,6 +62,11 @@ export const backend = {
     }),
   cancelChat: (requestId: string) =>
     request<void>("cancel_chat", { requestId }),
+  attachChatFiles: (paths?: string[]) =>
+    request<{ attachments: ChatAttachment[]; errors: string[] }>(
+      "attach_chat_files",
+      { paths: paths ?? null },
+    ),
   status: (url: string, model: string) =>
     request<{ available: boolean; text: string }>("python_request", {
       operation: "status",

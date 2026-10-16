@@ -1,22 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Square, Eraser, CircleHelp, Wrench } from "lucide-react";
-import type { ChatMessage } from "../models/ide";
+import { CircleHelp, Eraser, FileText, Image, Paperclip, Send, Square, Wrench, X } from "lucide-react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import type { ChatAttachment, ChatMessage } from "../models/ide";
 import { chatCommands } from "../controllers/useChatController";
 
 export function ChatView(props: {
   messages: ChatMessage[];
   busy: boolean;
-  send: (text: string) => void;
+  send: (text: string, attachments?: ChatAttachment[]) => void;
+  attachFiles: (paths?: string[]) => Promise<{ attachments: ChatAttachment[]; errors: string[] }>;
   stop: () => void;
   clear: () => void;
   explain: () => void;
 }) {
   const [text, setText] = useState("");
   const [selected, setSelected] = useState(0);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   const history = useRef<HTMLDivElement>(null);
+  const busy = useRef(props.busy);
+  busy.current = props.busy;
   const commands =
     text.startsWith("/") && !text.includes(" ")
       ? chatCommands.filter((c) =>
@@ -27,14 +35,67 @@ export function ChatView(props: {
     history.current?.scrollTo({ top: history.current.scrollHeight });
   }, [props.messages, props.busy]);
   useEffect(() => setSelected(0), [text]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        const payload = event.payload;
+        const panel = history.current?.closest(".assistant");
+        const bounds = panel?.getBoundingClientRect();
+        const scale = window.devicePixelRatio || 1;
+        const position = "position" in payload ? payload.position : undefined;
+        const isOverChat = Boolean(
+          bounds &&
+            position &&
+            position.x / scale >= bounds.left &&
+            position.x / scale <= bounds.right &&
+            position.y / scale >= bounds.top &&
+            position.y / scale <= bounds.bottom,
+        );
+        if (event.payload.type === "drop") {
+          setDragging(false);
+          if (isOverChat) void addAttachments(event.payload.paths);
+        } else if (event.payload.type === "leave") {
+          setDragging(false);
+        } else {
+          setDragging(isOverChat);
+        }
+      })
+      .then((dispose) => {
+        unlisten = dispose;
+      });
+    return () => unlisten?.();
+  }, []);
+  async function addAttachments(paths?: string[]) {
+    if (busy.current) return;
+    setAttachmentError("");
+    try {
+      const result = await props.attachFiles(paths);
+      setAttachments((current) => {
+        const unique = [...current];
+        for (const item of result.attachments) {
+          if (!unique.some((existing) => existing.id === item.id)) unique.push(item);
+        }
+        if (unique.length > 5) setAttachmentError("Solo se admiten 5 archivos por consulta.");
+        return unique.slice(0, 5);
+      });
+      if (result.errors.length) setAttachmentError(result.errors.join("\n"));
+      field.current?.focus();
+    } catch (error) {
+      setAttachmentError(String(error));
+    }
+  }
   function insert(command: string) {
     setText(`${command} `);
     field.current?.focus();
   }
   function submit() {
     if (!text.trim() || props.busy) return;
-    props.send(text.trim());
+    props.send(text.trim(), attachments);
     setText("");
+    setAttachments([]);
+    setAttachmentError("");
   }
   return (
     <>
@@ -42,6 +103,13 @@ export function ChatView(props: {
         {props.messages.map((message, index) => (
           <article key={index} className={`bubble ${message.role}`}>
             <small>{message.role === "user" ? "Tu" : "Asistente"}</small>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="message-attachments">
+                {message.attachments.map((name, attachmentIndex) => (
+                  <span key={`${name}-${attachmentIndex}`}><FileText size={12} />{name}</span>
+                ))}
+              </div>
+            )}
             <Markdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -80,7 +148,7 @@ export function ChatView(props: {
           </div>
         )}
       </div>
-      <div className="chat-composer">
+      <div className={`chat-composer ${dragging ? "dragging" : ""}`}>
         {commands.length > 0 && (
           <div className="slash-menu" role="listbox">
             {commands.map((command, index) => (
@@ -96,13 +164,38 @@ export function ChatView(props: {
             ))}
           </div>
         )}
-        <textarea
-          ref={field}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          aria-label="Mensaje al asistente"
-          placeholder="Mensaje..."
-          onKeyDown={(event) => {
+        <div className="composer-content">
+          {attachments.length > 0 && (
+            <div className="attachment-list" aria-label="Archivos adjuntos">
+              {attachments.map((attachment) => (
+                <span
+                  className="attachment-chip"
+                  key={attachment.id}
+                  title={attachment.truncated ? "El texto fue recortado al limite de contexto" : attachment.name}
+                >
+                  {attachment.kind === "image" ? <Image size={13} /> : <FileText size={13} />}
+                  <span>{attachment.name}</span>
+                  <button
+                    type="button"
+                    title={`Quitar ${attachment.name}`}
+                    onClick={() =>
+                      setAttachments((items) =>
+                        items.filter((item) => item.id !== attachment.id),
+                      )
+                    }
+                  ><X size={12} /></button>
+                </span>
+              ))}
+            </div>
+          )}
+          {attachmentError && <div className="attachment-error" role="alert">{attachmentError}</div>}
+          <textarea
+            ref={field}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            aria-label="Mensaje al asistente"
+            placeholder={attachments.length ? "Indica que quieres hacer con los archivos..." : "Mensaje..."}
+            onKeyDown={(event) => {
             if (
               commands.length &&
               ["ArrowDown", "ArrowUp", "Tab"].includes(event.key)
@@ -121,8 +214,18 @@ export function ChatView(props: {
               if (commands.length) insert(commands[selected]);
               else submit();
             } else if (event.key === "Escape") setText("");
-          }}
-        />
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className="attach-button"
+          title="Adjuntar documentos o imagenes"
+          disabled={props.busy || attachments.length >= 5}
+          onClick={() => void addAttachments()}
+        >
+          <Paperclip size={17} />
+        </button>
         <button
           title="Enviar mensaje"
           disabled={props.busy || !text.trim()}
