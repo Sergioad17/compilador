@@ -13,7 +13,7 @@ El lenguaje Miezee original ya no es el flujo principal. Se conserva como apoyo 
 - Modelo sugerido: `qwen3:14b`.
 - Ejecucion: consola integrada e interfaces graficas.
 - Vista previa: detecta interfaces Python y abre la pantalla en una ventana real.
-- Traduccion: Python a Miezee educativo y no ejecutable.
+- Traduccion: Python a Miezee educativo y no ejecutable, mostrada en un visor de codigo de solo lectura con lineas y resaltado.
 - Backend: Python, conectado mediante comandos nativos de Tauri.
 
 La IA ayuda a generar, corregir y explicar codigo, pero la validacion final del programa la hace el analizador local.
@@ -79,6 +79,7 @@ Si Ollama no esta disponible, el analizador, la consola, los menus, la tabla de 
 4. Usa **Ejecutar programa** para correr programas de consola.
 5. Usa **Vista previa** para abrir interfaces graficas generadas con `tkinter`, `customtkinter` o `PySide6`.
 6. Usa **Traducir codigo** para ver una traduccion educativa estructurada a Miezee.
+7. Selecciona un fragmento en el editor o en la traduccion y usa el menu contextual **¿Que hace, para que sirve?** para cargarlo en el chat sin enviarlo todavia.
 
 Ejemplo de programa interactivo:
 
@@ -190,9 +191,15 @@ Puede:
 - generar interfaces;
 - adaptar el codigo abierto en el editor;
 - leer documentos adjuntos y usarlos como contexto de la solicitud;
+- recibir fragmentos seleccionados desde el editor Python o desde la traduccion;
+- explicar cada fragmento con conocimiento de su archivo completo, lineas, clase, funcion, estado y dependencias;
 - enviar el codigo generado directamente al editor.
 
 El boton de clip y el arrastre permiten adjuntar hasta cinco archivos por consulta. Se admite texto, Markdown, CSV/TSV, JSON, RTF, HTML, XML, YAML, codigo, DOCX, XLSX, PPTX, OpenDocument y PDF. PNG, JPEG y WebP se envian a Ollama para modelos con vision. Adjuntar no ejecuta una accion por si mismo: el usuario debe indicar que desea analizar, resumir, comparar, extraer o generar a partir del contenido.
+
+El editor y el visor de traduccion tienen un menu contextual propio. Al elegir **¿Que hace, para que sirve?**, la seleccion aparece como contenido cargado en el compositor del chat, pero no se envia automaticamente. El usuario puede completar o cambiar su pregunta antes de pulsar **Enviar**. Este mecanismo no guarda respuestas ni ejemplos predefinidos: en cada consulta construye un contexto nuevo con la seleccion y una captura del archivo completo. Para selecciones hechas en la traduccion educativa tambien adjunta el Python original relacionado.
+
+Las explicaciones contextuales usan una ventana total de hasta `32768` tokens, dentro de la cual se reservan como maximo `4096` tokens para la respuesta. Los archivos normales se entregan completos; si un archivo excede el limite interno, el backend conserva obligatoriamente la seleccion y concentra el contexto alrededor de ella. La conversacion general mantiene un limite menor y la generacion de archivos Python usa su configuracion especializada.
 
 Cuando la IA genera codigo, el chat no debe pegar todo el codigo como respuesta principal. Debe colocarlo en el editor y mostrar un mensaje breve de confirmacion.
 
@@ -227,7 +234,7 @@ Menus principales:
 - **Archivo**: nuevo, abrir, guardar, guardar como y salir.
 - **Editar**: limpiar resultados y cambiar tamano de fuente.
 - **Ver**: vista previa, tabla de simbolos, analisis lexico, analisis sintactico, analisis semantico y controles para mostrar u ocultar chat, explorador y panel inferior.
-- **Ejecutar**: analizar, ejecutar programa y traducir codigo.
+- **Ejecutar**: analizar, ejecutar programa, traducir codigo y generar codigo intermedio.
 - **Terminal**: mostrar consola y ejecutar en consola.
 - **Ayuda**: configuracion y explicar error seleccionado con IA.
 
@@ -235,6 +242,7 @@ Atajos:
 
 - `Ctrl+N`: nuevo archivo.
 - `Ctrl+O`: abrir archivo.
+- `Ctrl+K`: abrir carpeta.
 - `Ctrl+S`: guardar.
 - `Ctrl+Shift+S`: guardar como.
 - `F5`: analizar.
@@ -242,8 +250,10 @@ Atajos:
 - `F7`: vista previa.
 - `F8`: mostrar consola.
 - `F9`: traducir codigo.
+- `F10`: generar codigo intermedio.
 - `Ctrl+L`: limpiar resultados.
-- `Ctrl+Shift+P`: paleta de comandos.
+- `Ctrl+Shift+P`: paleta de comandos generales de Miezee.
+- `F1`: paleta interna de acciones del editor Monaco cuando el editor tiene el foco.
 - `Ctrl+Shift+C`: mostrar u ocultar chat.
 - `Ctrl+B`: mostrar u ocultar explorador.
 - `Ctrl+J`: mostrar u ocultar panel inferior.
@@ -251,6 +261,8 @@ Atajos:
 ## Miezee como traduccion educativa
 
 El boton **Traducir codigo** genera una traduccion educativa estructurada desde Python hacia Miezee.
+
+El resultado se presenta como codigo coloreado, numerado y no modificable. Su menu contextual permite actualizar solo la traduccion actual o cargar una seleccion en el chat para solicitar una explicacion contextual.
 
 Ejemplo:
 
@@ -409,6 +421,8 @@ MOSTRAR area
 
 - `app.py`: punto de entrada de desarrollo para la aplicacion Tauri.
 - `frontend/src/`: interfaz React, modelos, controladores, vistas y servicios.
+- `frontend/src/views/CodeEditor.tsx`: editor Python y menu contextual de edicion y explicacion.
+- `frontend/src/views/TranslationView.tsx`: visor educativo de solo lectura y seleccion contextual.
 - `frontend/src-tauri/`: ventana nativa, dialogos, procesos y puente con Python.
 - `miezee/core/python_analyzer.py`: analizador seguro para Python.
 - `miezee/core/python_executor.py`: ejecutor auxiliar para pruebas de consola.
@@ -420,6 +434,7 @@ MOSTRAR area
 - `miezee/core/symbol_table.py` y `miezee/core/symbol.py`: tabla de simbolos.
 - `miezee/core/errors.py`: errores semanticos.
 - `miezee/ai/ai_client.py`: cliente local de Ollama.
+- `miezee/backend/chat_service.py`: construccion de contexto, generacion validada y explicaciones de selecciones.
 - `miezee/ai/chat_commands.py`: comandos locales del chat.
 - `miezee/ai/system_prompt.py`: instrucciones base para la IA local.
 - `miezee/services/settings_service.py`: carga de `.env`.
