@@ -1,8 +1,8 @@
-# Miezee Tauri Frontend
+# Miezee IDE
 
-Nuevo frontend en desarrollo para Miezee IDE.
+Frontend principal de Miezee IDE.
 
-Stack previsto:
+Stack:
 
 - Tauri
 - React
@@ -10,9 +10,8 @@ Stack previsto:
 - Monaco Editor
 - Backend Python mediante `python -m miezee.backend.cli`
 
-El frontend PySide6 actual sigue activo mientras esta migracion se completa.
-
-Cuando este frontend cubra las funciones necesarias, se podra inhabilitar el front PySide6 y dejarlo como legacy.
+El frontend anterior de PySide6 fue retirado. React/Tauri es la unica interfaz
+de escritorio mantenida por el proyecto.
 
 ## Contrato backend disponible
 
@@ -59,8 +58,8 @@ Se integraron tambien:
 - Paneles ocultables y separadores ajustables con el raton.
 - Confirmacion de descarte al cerrar documentos o la ventana.
 
-El frontend PySide6 sigue siendo la entrada de `app.py` mientras se verifica la
-migracion completa. El nuevo frontend se abre por separado. El chat no persiste
+`app.py` inicia esta aplicacion Tauri y conecta el backend con el interprete de
+Python activo. El chat no persiste
 mensajes ni soluciones pregrabadas: construye el prompt con la solicitud y el
 archivo actual. Esto aporta contexto al modelo; no modifica sus pesos.
 
@@ -107,17 +106,16 @@ El empaquetado del backend Python para distribucion aun esta pendiente.
 
 ```powershell
 npm run build
-npm run test:e2e
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Las pruebas de navegador usan respuestas controladas del bridge para verificar
-los flujos React. Las pruebas Rust ejecutan procesos Python reales para comprobar
-entrada interactiva, Unicode y detencion; `cargo test` se ejecuta en `src-tauri`.
-La suite Python comprueba el analizador y la generacion/validacion del chat.
+La compilacion valida React y TypeScript. Las pruebas Rust ejecutan procesos
+Python reales para comprobar entrada interactiva, Unicode, detencion y acceso
+seguro a archivos.
 
-## Paridad con el frontend anterior
+## Cobertura funcional
 
-| Funcion anterior | Implementacion nueva |
+| Funcion | Implementacion actual |
 | --- | --- |
 | Edicion Python y pestanas | Monaco y documentos del modelo MVC |
 | Abrir/guardar/abrir carpeta | Dialogos nativos y servicio de archivos |
@@ -139,8 +137,6 @@ repetible esta en `scripts/native-smoke.mjs` y usa el puerto CDP configurado al
 iniciar WebView2; no graba mensajes ni escribe archivos de codigo temporales.
 Solo guarda capturas si se proporciona explicitamente `MIEZEE_CAPTURE_DIR`.
 
-Queda pendiente la validacion manual de los dialogos nativos y la distribucion
-del backend fuera del repositorio. PySide6 no se ha desactivado.
-
-Antes de dar de baja PySide6 se verificaran las funciones completas del nuevo
-front y se avisara al usuario para que autorice ese cambio.
+Queda pendiente la distribucion autocontenida del backend Python fuera del
+repositorio. Los dialogos nativos y los flujos principales ya pertenecen
+exclusivamente a esta interfaz.

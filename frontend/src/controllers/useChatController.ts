@@ -27,7 +27,7 @@ export function useChatController(options: {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      text: "Bienvenido a Miezee IDE. Puedes pedirme que cree programas, interfaces y funciones.",
+      text: "Bienvenido a Miezee IDE. Puedes pedirme que cree programas en Miezee, interfaces, menús, archivos o bases de datos. El asistente está preparado para trabajar con tu modelo local de Ollama.",
     },
   ]);
   const [busy, setBusy] = useState(false);

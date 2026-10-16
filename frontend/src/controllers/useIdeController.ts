@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Analysis, Document, IntermediateCode, Panel, Preferences } from "../models/ide";
+import type { AIStatusKind, Analysis, Document, IntermediateCode, Panel, Preferences } from "../models/ide";
 import { backend } from "../services/backend";
 import { isTauri } from "@tauri-apps/api/core";
 import { useConsoleController } from "./useConsoleController";
@@ -52,6 +52,10 @@ export function useIdeController() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [aiStatus, setAiStatus] = useState("Comprobando modelo local...");
+  const [aiStatusKind, setAiStatusKind] = useState<AIStatusKind>("checking");
+  const [aiStatusDetail, setAiStatusDetail] = useState(
+    "Miezee esta comprobando si Ollama responde y si el modelo esta instalado.",
+  );
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const terminal = useConsoleController(setNotice);
   const active = documents.find((document) => document.id === activeId)!;
@@ -74,18 +78,50 @@ export function useIdeController() {
   }, [preferences]);
   useEffect(() => {
     if (!isTauri()) {
+      setAiStatusKind("disconnected");
+      setAiStatusDetail(
+        "La vista web no se conecta al backend. Abre Miezee como aplicacion Tauri.",
+      );
       setAiStatus("Vista web · backend desconectado");
       return;
     }
+    setAiStatus("Comprobando modelo...");
+    setAiStatusKind("checking");
+    setAiStatusDetail(
+      `Comprobando Ollama y el modelo ${preferences.model}. Espera unos segundos.`,
+    );
     let cancelled = false;
     const timer = setTimeout(() => {
       backend
         .status(preferences.url, preferences.model)
         .then((result) => {
-          if (!cancelled) setAiStatus(result.text);
+          if (cancelled) return;
+          setAiStatus(result.text);
+          if (result.available) {
+            setAiStatusKind("ready");
+            setAiStatusDetail(
+              `Ollama responde y el modelo ${preferences.model} esta instalado. Puedes usar el asistente.`,
+            );
+          } else if (result.text === "Modelo no instalado") {
+            setAiStatusKind("missing");
+            setAiStatusDetail(
+              `Ollama esta activo, pero falta ${preferences.model}. Ejecuta: ollama pull ${preferences.model}`,
+            );
+          } else {
+            setAiStatusKind("offline");
+            setAiStatusDetail(
+              "No se puede contactar con Ollama. Abre Ollama o ejecuta ollama serve.",
+            );
+          }
         })
         .catch(() => {
-          if (!cancelled) setAiStatus("Local no disponible");
+          if (!cancelled) {
+            setAiStatus("Ollama no disponible");
+            setAiStatusKind("offline");
+            setAiStatusDetail(
+              "No se puede contactar con Ollama. Abre Ollama o ejecuta ollama serve.",
+            );
+          }
         });
     }, 500);
     return () => {
@@ -403,6 +439,8 @@ export function useIdeController() {
     preferences,
     setPreferences,
     aiStatus,
+    aiStatusKind,
+    aiStatusDetail,
     cursor,
     setCursor,
     visibility,

@@ -23,6 +23,7 @@ import { WindowControls } from "./views/WindowControls";
 import { SettingsView } from "./views/SettingsView";
 import { LexicalAnalysisView } from "./views/LexicalAnalysisView";
 import { SyntaxAnalysisView } from "./views/SyntaxAnalysisView";
+import { AIStatusIndicator } from "./views/AIStatusIndicator";
 import { CommandPalette, type Action } from "./views/CommandPalette";
 import {
   closeWindow,
@@ -37,6 +38,7 @@ import purpleLogo from "./assets/purple_miezee.png";
 import "./styles.css";
 
 const panels: Panel[] = [
+  "Traduccion",
   "Problemas",
   "Resultado",
   "Lexico",
@@ -46,7 +48,6 @@ const panels: Panel[] = [
   "Semantico",
   "Codigo intermedio",
   "Vista previa",
-  "Traduccion",
 ];
 export function App() {
   const ide = useIdeController();
@@ -610,9 +611,15 @@ export function App() {
           <header className="panel-title">
             <MessageSquare size={16} />
             <span>ASISTENTE</span>
-            <span className="local-status" title={ide.preferences.model}>
-              {ide.aiStatus}
-            </span>
+            <AIStatusIndicator
+              kind={ide.chat.busy ? "working" : ide.aiStatusKind}
+              text={ide.chat.busy ? "Procesando..." : ide.aiStatus}
+              detail={
+                ide.chat.busy
+                  ? `El modelo ${ide.preferences.model} esta generando una respuesta. Espera a que termine o usa Detener.`
+                  : ide.aiStatusDetail
+              }
+            />
           </header>
           <ChatView
             {...ide.chat}
@@ -637,7 +644,16 @@ export function App() {
                 : "Listo"}
         </span>
         <span className="status-end">UTF-8</span>
-        <span className="ai-footer">IA: {ide.aiStatus}</span>
+        <AIStatusIndicator
+          footer
+          kind={ide.chat.busy ? "working" : ide.aiStatusKind}
+          text={ide.chat.busy ? "Procesando..." : ide.aiStatus}
+          detail={
+            ide.chat.busy
+              ? `El modelo ${ide.preferences.model} esta generando una respuesta. Espera a que termine o usa Detener.`
+              : ide.aiStatusDetail
+          }
+        />
       </footer>
       {ide.settingsOpen && (
         <SettingsView

@@ -97,3 +97,11 @@ export interface Preferences {
   url: string;
   model: string;
 }
+
+export type AIStatusKind =
+  | "checking"
+  | "ready"
+  | "working"
+  | "missing"
+  | "offline"
+  | "disconnected";

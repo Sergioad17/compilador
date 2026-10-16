@@ -5,7 +5,7 @@ from PySide6.QtCore import QThreadPool, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QTextEdit, QVBoxLayout, QWidget
 
-from miezee.ai.ai_client import AIClient, OFFLINE_MESSAGE
+from miezee.ai.ai_client import AIClient, WELCOME_MESSAGE
 from miezee.ai.ai_worker import AIWorker
 from miezee.ai.chat_commands import CHAT_COMMANDS, ChatCommandHandler
 from miezee.core.python_analyzer import PythonAnalyzer
@@ -69,7 +69,7 @@ class ChatPanel(QWidget):
         self.stop_button.clicked.connect(self.stop)
         self.explain_error_button.clicked.connect(self.explain_selected_error)
         self.fix_button.clicked.connect(self.fix_selected_instruction)
-        self.add_assistant(OFFLINE_MESSAGE)
+        self.add_assistant(WELCOME_MESSAGE)
 
     def send(self) -> None:
         text = self.input.text().strip()
@@ -383,7 +383,15 @@ Codigo actual:
         self.current_request = "chat"
 
     def is_local_unavailable(self, text: str) -> bool:
-        return "Modo sin conexion" in text or "Modelo local no disponible" in text
+        return any(
+            message in text
+            for message in (
+                "Modo sin conexion",
+                "Modelo local no disponible",
+                "modelo local de Ollama no esta configurado",
+                "Ollama no esta corriendo",
+            )
+        )
 
     def is_provider_error(self, text: str) -> bool:
         lowered = text.strip().lower()

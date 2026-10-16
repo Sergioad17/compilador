@@ -65,8 +65,18 @@ export function ChatView(props: {
           </article>
         ))}
         {props.busy && (
-          <div className="chat-pending" role="status">
-            Pensando...
+          <div
+            className="chat-pending"
+            role="status"
+            aria-live="polite"
+            aria-label="El asistente esta pensando"
+          >
+            <span className="pending-label">Pensando</span>
+            <span className="pending-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
           </div>
         )}
       </div>

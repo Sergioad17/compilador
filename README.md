@@ -7,34 +7,35 @@ El lenguaje Miezee original ya no es el flujo principal. Se conserva como apoyo 
 ## Estado actual
 
 - Lenguaje principal: Python.
-- Interfaz de escritorio: PySide6.
+- Interfaz de escritorio: Tauri + React + TypeScript + Monaco Editor.
 - Analizador local: revisa sintaxis, importaciones permitidas, llamadas peligrosas y tabla de simbolos.
 - IA local opcional: Ollama.
 - Modelo sugerido: `qwen3:14b`.
 - Ejecucion: consola integrada e interfaces graficas.
 - Vista previa: detecta interfaces Python y abre la pantalla en una ventana real.
 - Traduccion: Python a Miezee educativo y no ejecutable.
-- Pruebas: `unittest`.
+- Backend: Python, conectado mediante comandos nativos de Tauri.
 
 La IA ayuda a generar, corregir y explicar codigo, pero la validacion final del programa la hace el analizador local.
 
-## Nuevo frontend Tauri
+## Frontend principal
 
-Se esta migrando la interfaz a Tauri + React + TypeScript + Monaco, siguiendo MVC.
-El nuevo frontend incluye archivos/carpetas, analisis, simbolos, traduccion, consola
-interactiva, vista previa, chat Ollama, temas y menus. `app.py` sigue abriendo
-PySide6 durante la verificacion de la migracion.
+La interfaz principal usa Tauri + React + TypeScript + Monaco y sigue una separacion MVC.
+Incluye archivos y carpetas, analisis, simbolos, traduccion, consola interactiva,
+vista previa, chat Ollama, temas y menus. El frontend anterior de PySide6 fue retirado.
 
 Con Node, Rust y las herramientas C++ instaladas:
 
 ```powershell
 cd frontend
 npm install
-npm run desktop
+cd ..
+python app.py
 ```
 
 El detalle de arquitectura, pruebas y paridad esta en [frontend/README.md](frontend/README.md).
-La distribucion del backend Python fuera del repositorio sigue pendiente.
+Durante el desarrollo, `app.py` inicia Tauri y conecta el backend con el mismo
+interprete de Python activo. La distribucion autocontenida sigue pendiente.
 
 ## Instalacion en Windows
 
@@ -44,13 +45,10 @@ py -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 copy .env.example .env
+cd frontend
+npm install
+cd ..
 python app.py
-```
-
-Para ejecutar pruebas:
-
-```powershell
-python -m unittest discover -s tests -v
 ```
 
 ## Configuracion de IA local
@@ -405,7 +403,9 @@ MOSTRAR area
 
 ## Estructura del proyecto
 
-- `app.py`: punto de entrada.
+- `app.py`: punto de entrada de desarrollo para la aplicacion Tauri.
+- `frontend/src/`: interfaz React, modelos, controladores, vistas y servicios.
+- `frontend/src-tauri/`: ventana nativa, dialogos, procesos y puente con Python.
 - `miezee/core/python_analyzer.py`: analizador seguro para Python.
 - `miezee/core/python_executor.py`: ejecutor auxiliar para pruebas de consola.
 - `miezee/core/python_translator.py`: traduccion educativa estructurada de Python a Miezee.
@@ -415,25 +415,12 @@ MOSTRAR area
 - `miezee/core/data_types.py`: tipos y compatibilidad.
 - `miezee/core/symbol_table.py` y `miezee/core/symbol.py`: tabla de simbolos.
 - `miezee/core/errors.py`: errores semanticos.
-- `miezee/ui/main_window.py`: ventana principal, menus, ejecucion y conexion de paneles.
-- `miezee/ui/code_editor.py`: editor con numeros de linea y marcas de error.
-- `miezee/ui/syntax_highlighter.py`: resaltado de sintaxis Python.
-- `miezee/ui/console_panel.py`: consola interactiva.
-- `miezee/ui/preview_panel.py`: deteccion y apertura de interfaces graficas.
-- `miezee/ui/problems_panel.py`: tabla de errores.
-- `miezee/ui/symbol_table_panel.py`: tabla de simbolos visual.
-- `miezee/ui/chat_panel.py`: chat, comandos y generacion de codigo.
-- `miezee/ui/explorer_panel.py`: explorador de archivos.
-- `miezee/ui/command_palette.py`: paleta de comandos.
-- `miezee/ui/dark_theme.py`: tema oscuro.
 - `miezee/ai/ai_client.py`: cliente local de Ollama.
-- `miezee/ai/ai_worker.py`: peticiones de IA en segundo plano.
 - `miezee/ai/chat_commands.py`: comandos locales del chat.
 - `miezee/ai/system_prompt.py`: instrucciones base para la IA local.
 - `miezee/services/settings_service.py`: carga de `.env`.
 - `miezee/services/file_service.py`: lectura y escritura de archivos.
 - `examples/`: casos de prueba Python renovados, de 10 a 15 lineas cada uno.
-- `tests/`: pruebas unitarias.
 
 ## Casos de prueba incluidos
 
@@ -457,24 +444,23 @@ Si aparecen archivos antiguos como:
 
 pueden eliminarse. Estan incluidos en `.gitignore`.
 
-## Pruebas
+## Verificacion
 
-Ejecuta:
+Ejecuta desde la raiz del proyecto:
 
 ```powershell
-python -m unittest discover -s tests -v
+cd frontend
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-La suite cubre:
+Estas comprobaciones cubren:
 
-- analizador Python;
-- ejecucion de consola;
-- traduccion Python a Miezee;
-- chat y comandos;
-- consola interactiva;
-- vista previa;
-- tabla de simbolos;
-- analizador Miezee heredado.
+- compilacion de React y TypeScript;
+- integracion nativa de Tauri;
+- ejecucion interactiva con entrada y salida Unicode;
+- detencion de procesos;
+- proteccion del codigo fuente en el explorador.
 
 ## Limitaciones actuales
 
@@ -495,14 +481,16 @@ La suite cubre:
 7. Pedir una pantalla sencilla y abrirla con `F7`.
 8. Mostrar la tabla de simbolos.
 9. Usar **Traducir codigo** para ver la representacion educativa en Miezee.
-10. Ejecutar las pruebas con `python -m unittest discover -s tests -v`.
+10. Verificar el frontend con `npm run build` desde `frontend`.
 
 ## Estado verificado
 
 Ultima verificacion local:
 
 ```powershell
-python -m unittest discover -s tests -v
+cd frontend
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Resultado esperado actual: pruebas unitarias pasando.
+Resultado esperado actual: frontend y puente nativo compilando correctamente.

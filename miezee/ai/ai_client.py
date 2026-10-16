@@ -6,10 +6,15 @@ from miezee.ai.system_prompt import SYSTEM_PROMPT
 from miezee.services.settings_service import SettingsService
 
 
-OFFLINE_MESSAGE = (
+WELCOME_MESSAGE = (
     "Bienvenido a Miezee IDE.\n"
-    "Puedes pedirme que cree programas en Python, interfaces, menus, archivos o bases de datos.\n"
-    "El analisis local y la consola estan disponibles aunque la IA local no este conectada."
+    "Puedes pedirme que cree programas en Miezee, interfaces, menús, archivos o bases de datos.\n"
+    "El asistente está preparado para trabajar con tu modelo local de Ollama."
+)
+
+OFFLINE_MESSAGE = (
+    "El modelo local de Ollama no esta configurado. "
+    "Configura OLLAMA_MODEL para utilizar el asistente de IA."
 )
 
 
