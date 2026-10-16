@@ -238,6 +238,98 @@ pre {
   margin: 0;
   padding-left: 20px;
 }
+.phase-report {
+  min-width: 680px;
+}
+.phase-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 28px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.phase-ok {
+  color: #93cdb0;
+}
+.phase-error {
+  color: #eda0a6;
+}
+.phase-errors {
+  display: grid;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.phase-errors button {
+  padding: 5px 0;
+  color: #eda0a6;
+  text-align: left;
+}
+.analysis-table-wrap {
+  overflow: auto;
+}
+.token-table {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+.token-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #1c1c1c;
+}
+.token-table td:first-child,
+.token-table td:nth-last-child(-n + 2) {
+  color: #9d9d9d;
+  white-space: nowrap;
+}
+.empty-analysis {
+  color: #a9a9a9;
+}
+.syntax-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.syntax-metrics div {
+  padding: 10px 12px 10px 0;
+}
+.syntax-metrics dt {
+  color: #9d9d9d;
+}
+.syntax-metrics dd {
+  margin: 4px 0 0;
+  color: #eeeeee;
+  font: 600 14px Consolas, monospace;
+}
+.syntax-section h3 {
+  margin: 12px 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.construct-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.construct-list span {
+  color: #a9a9a9;
+}
+.construct-list code {
+  color: #dedede;
+}
+.syntax-tree-section {
+  min-height: 0;
+}
+.syntax-tree {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: #181818;
+  white-space: pre;
+  overflow: auto;
+}
 .intermediate-code {
   margin: 0;
   tab-size: 4;

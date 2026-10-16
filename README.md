@@ -145,6 +145,10 @@ La traduccion educativa cubre bloques anidados, `if/elif/else`, `match/case`, ci
 
 El panel **Semantico** muestra el estado de las validaciones, los ambitos producidos por `symtable`, los identificadores y sus roles, las advertencias de nombres y los errores de contexto detectados por el compilador oficial de Python. Incluye restricciones de importaciones y llamadas del modo seguro.
 
+El panel **Lexico** muestra la secuencia completa de tokens del archivo: categoria, tipo general, tipo exacto, lexema y posiciones inicial y final. Los errores lexicos se muestran en el mismo panel y tambien en **Problemas**; al seleccionar un token, el editor navega a su linea.
+
+El panel **Sintactico** muestra el estado independiente de la fase, los errores gramaticales, un resumen con cantidades de nodos, sentencias y expresiones, las construcciones detectadas y el arbol de sintaxis abstracta (AST) completo. Si existen errores lexicos, indica que la construccion del AST no fue ejecutada.
+
 El comando **Generar codigo intermedio** (`F10`) produce TAC para el archivo Python actual. Incluye temporales, etiquetas, saltos, cortocircuito, comparaciones encadenadas, ciclos, funciones, llamadas, colecciones, comprensiones, clases, excepciones, recursos y construcciones asincronas. Solo se genera cuando el archivo supera los analisis previos y cuando la integridad de etiquetas y saltos es correcta. Consulta [la especificacion del codigo intermedio](docs/CODIGO_INTERMEDIO.md).
 
 ## Consola interactiva
@@ -220,7 +224,7 @@ Menus principales:
 
 - **Archivo**: nuevo, abrir, guardar, guardar como y salir.
 - **Editar**: limpiar resultados y cambiar tamano de fuente.
-- **Ver**: vista previa, tabla de simbolos, mostrar/ocultar chat, explorador y panel inferior.
+- **Ver**: vista previa, tabla de simbolos, analisis lexico, analisis sintactico, analisis semantico y controles para mostrar u ocultar chat, explorador y panel inferior.
 - **Ejecutar**: analizar, ejecutar programa y traducir codigo.
 - **Terminal**: mostrar consola y ejecutar en consola.
 - **Ayuda**: configuracion y explicar error seleccionado con IA.

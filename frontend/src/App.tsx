@@ -21,6 +21,8 @@ import { ExplorerView } from "./views/ExplorerView";
 import { HoverMenu } from "./views/HoverMenu";
 import { WindowControls } from "./views/WindowControls";
 import { SettingsView } from "./views/SettingsView";
+import { LexicalAnalysisView } from "./views/LexicalAnalysisView";
+import { SyntaxAnalysisView } from "./views/SyntaxAnalysisView";
 import { CommandPalette, type Action } from "./views/CommandPalette";
 import {
   closeWindow,
@@ -37,6 +39,8 @@ import "./styles.css";
 const panels: Panel[] = [
   "Problemas",
   "Resultado",
+  "Lexico",
+  "Sintactico",
   "Consola",
   "Tabla de simbolos",
   "Semantico",
@@ -169,6 +173,14 @@ export function App() {
       {
         name: "Mostrar tabla de simbolos",
         run: () => show("Tabla de simbolos"),
+      },
+      {
+        name: "Mostrar analisis lexico",
+        run: () => { void ide.perform("lexical"); },
+      },
+      {
+        name: "Mostrar analisis sintactico",
+        run: () => { void ide.perform("syntax"); },
       },
       {
         name: "Mostrar analisis semantico",
@@ -529,6 +541,12 @@ export function App() {
                     {ide.analysis.rules.join(", ") || "Ninguna"}
                   </p>
                 </>
+              )}
+              {ide.panel === "Lexico" && (
+                <LexicalAnalysisView analysis={ide.analysis} goToLine={ide.goToLine} />
+              )}
+              {ide.panel === "Sintactico" && (
+                <SyntaxAnalysisView analysis={ide.analysis} goToLine={ide.goToLine} />
               )}
               {ide.panel === "Semantico" && ide.analysis && (
                 <div className="semantic-report">

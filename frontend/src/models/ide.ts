@@ -23,13 +23,13 @@ export interface Analysis {
     ok: boolean;
     status: "ok" | "error" | "not_run";
     errors: Analysis["errors"];
-    summary: {
+    summary: Partial<{
       root: string;
       nodeCount: number;
       statementCount: number;
       expressionCount: number;
       constructs: Record<string, number>;
-    } | Record<string, never>;
+    }>;
     tree: string;
   };
   tokens?: {
@@ -79,6 +79,8 @@ export interface Document {
 export type Panel =
   | "Problemas"
   | "Resultado"
+  | "Lexico"
+  | "Sintactico"
   | "Consola"
   | "Tabla de simbolos"
   | "Traduccion"

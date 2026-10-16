@@ -344,18 +344,24 @@ export function useIdeController() {
     window.addEventListener("keydown", keyboard, true);
     return () => window.removeEventListener("keydown", keyboard, true);
   });
-  async function perform(operation: "analyze" | "semantic" | "translate" | "intermediate") {
+  async function perform(operation: "analyze" | "lexical" | "syntax" | "semantic" | "translate" | "intermediate") {
     if (busy) return;
     const version = revision.current;
     setBusy(true);
     setNotice("");
     setVisibility((value) => ({ ...value, bottom: true }));
     try {
-      if (operation === "analyze" || operation === "semantic") {
+      if (["analyze", "lexical", "syntax", "semantic"].includes(operation)) {
         const result = await backend.analyze(active.source);
         if (version === revision.current) {
           setAnalysis(result);
-          setPanel(operation === "semantic" ? "Semantico" : "Problemas");
+          const target: Record<string, Panel> = {
+            analyze: "Problemas",
+            lexical: "Lexico",
+            syntax: "Sintactico",
+            semantic: "Semantico",
+          };
+          setPanel(target[operation]);
         }
       } else if (operation === "translate") {
         const result = await backend.translate(active.source);

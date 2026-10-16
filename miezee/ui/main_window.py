@@ -63,6 +63,10 @@ class MainWindow(QMainWindow):
         self.problems = ProblemsPanel()
         self.result_output = QPlainTextEdit()
         self.result_output.setReadOnly(True)
+        self.lexical_output = QPlainTextEdit()
+        self.lexical_output.setReadOnly(True)
+        self.syntax_output = QPlainTextEdit()
+        self.syntax_output.setReadOnly(True)
         self.semantic_output = QPlainTextEdit()
         self.semantic_output.setReadOnly(True)
         self.intermediate_output = QPlainTextEdit()
@@ -74,6 +78,8 @@ class MainWindow(QMainWindow):
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.problems, "Problemas")
         self.bottom_tabs.addTab(self.result_output, "Resultado")
+        self.bottom_tabs.addTab(self.lexical_output, "Lexico")
+        self.bottom_tabs.addTab(self.syntax_output, "Sintactico")
         self.bottom_tabs.addTab(self.semantic_output, "Semantico")
         self.bottom_tabs.addTab(self.intermediate_output, "Codigo intermedio")
         self.bottom_tabs.addTab(self.console_output, "Consola")
@@ -136,6 +142,8 @@ class MainWindow(QMainWindow):
         view_menu = menu_bar.addMenu("Ver")
         view_menu.addAction(self._menu_action("Mostrar vista previa", "F7", self.show_preview))
         view_menu.addAction(self._menu_action("Mostrar tabla de simbolos", "", lambda: self.bottom_tabs.setCurrentWidget(self.symbols)))
+        view_menu.addAction(self._menu_action("Mostrar analisis lexico", "", self.show_lexical_analysis))
+        view_menu.addAction(self._menu_action("Mostrar analisis sintactico", "", self.show_syntax_analysis))
         view_menu.addAction(self._menu_action("Mostrar analisis semantico", "", self.show_semantic_analysis))
         view_menu.addSeparator()
         view_menu.addAction(self._menu_action("Mostrar u ocultar chat", "Ctrl+Shift+C", lambda: self.chat.setVisible(not self.chat.isVisible())))
@@ -159,7 +167,7 @@ class MainWindow(QMainWindow):
         self._shortcut("Ctrl+Shift+P", self.open_palette)
         self.palette = CommandPalette([
             "Nuevo archivo", "Abrir archivo", "Abrir carpeta", "Guardar archivo", "Analizar programa", "Ejecutar programa",
-            "Traducir codigo", "Generar codigo intermedio", "Mostrar analisis semantico", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
+            "Traducir codigo", "Generar codigo intermedio", "Mostrar analisis lexico", "Mostrar analisis sintactico", "Mostrar analisis semantico", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
             "Mostrar u ocultar chat", "Mostrar u ocultar explorador", "Cambiar tamano de fuente",
         ], self)
         self.palette.command_selected.connect(self.execute_palette_command)
@@ -267,6 +275,8 @@ class MainWindow(QMainWindow):
         self.status_errors.setText(f"Errores: {len(self.last_result.errors)}")
         self.status_analyzer.setText("Analizador: correcto" if self.last_result.ok else "Analizador: con errores")
         self.result_output.setPlainText(self._result_text(self.last_result))
+        self.lexical_output.setPlainText(self._lexical_text(self.last_result))
+        self.syntax_output.setPlainText(self._syntax_text(self.last_result))
         self.semantic_output.setPlainText(self._semantic_text(self.last_result))
         self.console_output.set_text(self._console_text(self.last_result))
         if not auto_select:
@@ -430,6 +440,16 @@ class MainWindow(QMainWindow):
         self.bottom_tabs.setVisible(True)
         self.bottom_tabs.setCurrentWidget(self.semantic_output)
 
+    def show_lexical_analysis(self) -> None:
+        self.analyze_program(auto_select=False)
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.lexical_output)
+
+    def show_syntax_analysis(self) -> None:
+        self.analyze_program(auto_select=False)
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.syntax_output)
+
     def generate_intermediate_code(self) -> None:
         self.analyze_program(auto_select=False)
         self.bottom_tabs.setVisible(True)
@@ -460,6 +480,63 @@ class MainWindow(QMainWindow):
                 lines.append(f"- {scope['name']} [{scope['type']}]: {identifiers or 'sin identificadores'}")
         if semantic_errors:
             lines += ["", "Errores semanticos:"] + [f"- {error.code} linea {error.line}: {error.explanation}" for error in semantic_errors]
+        return "\n".join(lines)
+
+    def _lexical_text(self, result: PythonAnalysisResult) -> str:
+        errors = [error for error in result.errors if error.code == "PY-LEXICO"]
+        lines = [
+            "Analisis lexico de Python",
+            "==========================",
+            f"Estado: {'con errores' if errors else 'correcto'}",
+            f"Tokens: {len(result.tokens)}",
+        ]
+        if errors:
+            lines += ["", "Errores lexicos:"]
+            lines.extend(
+                f"- Linea {error.line}, columna {error.column or 1}: {error.explanation}"
+                for error in errors
+            )
+        lines += ["", f"{'#':>4}  {'CATEGORIA':<16} {'TIPO':<12} {'TIPO EXACTO':<16} {'RANGO':<17} LEXEMA"]
+        for index, token in enumerate(result.tokens, 1):
+            lexeme = token.lexeme.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t") or "(vacio)"
+            position = f"{token.line}:{token.column}-{token.end_line}:{token.end_column}"
+            lines.append(f"{index:>4}  {token.category:<16} {token.kind:<12} {token.exact_kind:<16} {position:<17} {lexeme}")
+        return "\n".join(lines)
+
+    def _syntax_text(self, result: PythonAnalysisResult) -> str:
+        lexical_errors = [error for error in result.errors if error.code == "PY-LEXICO"]
+        syntax_errors = [error for error in result.errors if error.code == "PY-SINTAXIS"]
+        status = "no ejecutado por errores lexicos" if lexical_errors else "con errores" if syntax_errors else "correcto"
+        lines = [
+            "Analisis sintactico de Python",
+            "=============================",
+            f"Estado: {status}",
+        ]
+        if syntax_errors:
+            lines += ["", "Errores sintacticos:"]
+            lines.extend(
+                f"- Linea {error.line}, columna {error.column or 1}: {error.explanation}"
+                for error in syntax_errors
+            )
+        if lexical_errors:
+            lines += ["", "Corrige los errores lexicos para construir el AST."]
+            return "\n".join(lines)
+        if not result.syntax_summary:
+            return "\n".join(lines)
+        summary = result.syntax_summary
+        lines += [
+            "",
+            "Resumen del AST:",
+            f"- Raiz: {summary.get('root', 'Module')}",
+            f"- Nodos: {summary.get('nodeCount', 0)}",
+            f"- Sentencias: {summary.get('statementCount', 0)}",
+            f"- Expresiones: {summary.get('expressionCount', 0)}",
+            "",
+            "Construcciones detectadas:",
+        ]
+        constructs = summary.get("constructs", {})
+        lines.extend(f"- {name}: {count}" for name, count in sorted(constructs.items()))
+        lines += ["", "Arbol de sintaxis abstracta (AST):", result.syntax_tree or "AST vacio"]
         return "\n".join(lines)
 
     def _result_text(self, result: PythonAnalysisResult) -> str:
@@ -502,6 +579,8 @@ class MainWindow(QMainWindow):
         self.last_result = None
         self.console_output.clear()
         self.result_output.clear()
+        self.lexical_output.clear()
+        self.syntax_output.clear()
         self.semantic_output.clear()
         self.intermediate_output.clear()
         self.problems.set_errors([])
@@ -538,6 +617,8 @@ class MainWindow(QMainWindow):
             "Ejecutar programa": self.run_program,
             "Traducir codigo": self.translate_code,
             "Generar codigo intermedio": self.generate_intermediate_code,
+            "Mostrar analisis lexico": self.show_lexical_analysis,
+            "Mostrar analisis sintactico": self.show_syntax_analysis,
             "Mostrar analisis semantico": self.show_semantic_analysis,
             "Mostrar consola": self.show_console,
             "Mostrar vista previa": self.show_preview,

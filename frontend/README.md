@@ -122,6 +122,8 @@ La suite Python comprueba el analizador y la generacion/validacion del chat.
 | Edicion Python y pestanas | Monaco y documentos del modelo MVC |
 | Abrir/guardar/abrir carpeta | Dialogos nativos y servicio de archivos |
 | Analizar/problemas/reglas/simbolos | Mismo backend Python y paneles React |
+| Tokens del analisis lexico | Panel Lexico con categorias, lexemas y posiciones |
+| AST y resumen sintactico | Panel Sintactico con metricas, construcciones y arbol completo |
 | Ejecutar, leer input, detener | Proceso Python separado y consola incremental |
 | Traducir a Miezee | Mismo traductor Python |
 | Vista previa GUI | Proceso separado con arranque automatico |
