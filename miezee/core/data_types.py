@@ -16,12 +16,21 @@ class DataType(str, Enum):
     BOOLEANO = "BOOLEANO"
     FECHA = "FECHA"
     ARCHIVO = "ARCHIVO"
+    BYTES = "BYTES"
+    COMPLEJO = "COMPLEJO"
+    LISTA = "LISTA"
+    TUPLA = "TUPLA"
+    DICCIONARIO = "DICCIONARIO"
+    CONJUNTO = "CONJUNTO"
+    GENERADOR = "GENERADOR"
+    NULO = "NULO"
     DESCONOCIDO = "DESCONOCIDO"
 
 
 INTEGER_TYPES = {DataType.BYTE, DataType.SHORT, DataType.INT, DataType.LONG, DataType.ENTERO}
 FLOAT_TYPES = {DataType.FLOAT, DataType.DOUBLE, DataType.DECIMAL}
-NUMERIC_TYPES = INTEGER_TYPES | FLOAT_TYPES
+COMPLEX_TYPES = {DataType.COMPLEJO}
+NUMERIC_TYPES = INTEGER_TYPES | FLOAT_TYPES | COMPLEX_TYPES
 BOOLEAN_TYPES = {DataType.BOOLEAN, DataType.BOOLEANO}
 
 INTEGER_ORDER = {
@@ -63,10 +72,14 @@ def is_assignment_compatible(target: DataType, source: DataType) -> bool:
         return True
     if target in BOOLEAN_TYPES and source in BOOLEAN_TYPES:
         return True
+    if target == DataType.COMPLEJO and source in NUMERIC_TYPES:
+        return True
     return False
 
 
 def promoted_numeric_type(left: DataType, right: DataType, operator: str) -> DataType:
+    if DataType.COMPLEJO in {left, right}:
+        return DataType.COMPLEJO
     if operator == "/":
         return DataType.DOUBLE if DataType.DOUBLE in {left, right} else DataType.DECIMAL
     if left in FLOAT_TYPES or right in FLOAT_TYPES:

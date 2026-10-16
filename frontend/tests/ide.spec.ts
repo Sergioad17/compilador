@@ -11,6 +11,14 @@ test.beforeEach(async ({ page }) => {
       { name: "sumar", type: "Funcion", line: 1, kind: "funcion python" },
     ],
     rules: ["PY01", "PY02"],
+    lexical: { ok: true, status: "ok", tokenCount: 12, errors: [] },
+    syntax: {
+      ok: true,
+      status: "ok",
+      errors: [],
+      summary: { root: "Module", nodeCount: 9, statementCount: 2, expressionCount: 3, constructs: { FunctionDef: 1, Return: 1 } },
+      tree: "Module(body=[FunctionDef(...)])",
+    },
     semantic: {
       ok: true,
       status: "ok",

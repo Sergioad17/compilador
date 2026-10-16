@@ -125,8 +125,14 @@ El analizador local realiza fases lexica, sintactica y semantica sin ejecutar el
 Funciones actuales:
 
 - Clasifica tokens de Python con lexema, tipo, linea y columna.
+- Reconoce palabras reservadas, palabras clave contextuales, operadores exactos, comentarios, sangria y segmentos de f-strings.
 - Detecta caracteres y operadores invalidos, cadenas sin cerrar e indentacion lexicamente incorrecta como `PY-LEXICO` (`PY00`).
+- Detecta tambien literales numericos mal formados mediante los diagnosticos oficiales de CPython y mantiene separadas las fases lexica y sintactica.
 - Detecta estructuras que incumplen la gramatica de Python como `PY-SINTAXIS` (`PY01`).
+- Construye el AST oficial de Python y resume nodos, sentencias, expresiones y construcciones sin ejecutar el programa.
+- Permite ejecutar las fases por separado con `python -m miezee.backend.cli lexical`, `python -m miezee.backend.cli syntax` y `python -m miezee.backend.cli semantic`.
+- El analisis semantico distingue mayusculas en identificadores, construye ambitos, valida firmas locales, contexto de instrucciones y politicas de ejecucion segura.
+- Los nombres no resueltos y las anotaciones incompatibles se presentan como advertencias conservadoras, porque Python permite resolucion dinamica y no obliga los tipos anotados en tiempo de ejecucion.
 - Bloquea importaciones peligrosas como `os`, `sys`, `subprocess`, `socket`, `requests`, `urllib`, `ctypes` y similares.
 - Bloquea llamadas dinamicas o peligrosas como `eval`, `exec`, `compile`, `__import__`, `globals`, `locals` y `vars`.
 - Permite librerias utiles para el prototipo: `tkinter`, `customtkinter`, `PySide6`, `sqlite3`, `json`, `csv`, `math`, `pathlib`, `datetime` y `random`.
@@ -139,7 +145,7 @@ La traduccion educativa cubre bloques anidados, `if/elif/else`, `match/case`, ci
 
 El panel **Semantico** muestra el estado de las validaciones, los ambitos producidos por `symtable`, los identificadores y sus roles, las advertencias de nombres y los errores de contexto detectados por el compilador oficial de Python. Incluye restricciones de importaciones y llamadas del modo seguro.
 
-El comando **Generar codigo intermedio** (`F10`) produce TAC para el archivo Python actual. Incluye temporales, etiquetas, saltos, ciclos, funciones, llamadas, colecciones, clases, excepciones y recursos. Solo se genera cuando el archivo supera los analisis previos. Consulta [la especificacion del codigo intermedio](docs/CODIGO_INTERMEDIO.md).
+El comando **Generar codigo intermedio** (`F10`) produce TAC para el archivo Python actual. Incluye temporales, etiquetas, saltos, cortocircuito, comparaciones encadenadas, ciclos, funciones, llamadas, colecciones, comprensiones, clases, excepciones, recursos y construcciones asincronas. Solo se genera cuando el archivo supera los analisis previos y cuando la integridad de etiquetas y saltos es correcta. Consulta [la especificacion del codigo intermedio](docs/CODIGO_INTERMEDIO.md).
 
 ## Consola interactiva
 

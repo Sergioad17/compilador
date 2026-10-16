@@ -3,6 +3,9 @@ export interface Analysis {
   errors: {
     code: string;
     line: number;
+    column?: number;
+    endLine?: number | null;
+    endColumn?: number | null;
     instruction?: string;
     explanation: string;
     suggestion: string;
@@ -10,6 +13,25 @@ export interface Analysis {
   }[];
   symbols: { name: string; type: string; line: number; kind: string }[];
   rules: string[];
+  lexical: {
+    ok: boolean;
+    status: "ok" | "error";
+    tokenCount: number;
+    errors: Analysis["errors"];
+  };
+  syntax: {
+    ok: boolean;
+    status: "ok" | "error" | "not_run";
+    errors: Analysis["errors"];
+    summary: {
+      root: string;
+      nodeCount: number;
+      statementCount: number;
+      expressionCount: number;
+      constructs: Record<string, number>;
+    } | Record<string, never>;
+    tree: string;
+  };
   tokens?: {
     type: string;
     category: string;
@@ -37,6 +59,14 @@ export interface IntermediateCode {
   ok: boolean;
   text: string;
   instructions: { op: string; arg1: string; arg2: string; result: string; line: number }[];
+  errors?: Analysis["errors"];
+  metadata?: {
+    format: "TAC";
+    version: number;
+    sourceLanguage: "Python";
+    sourceLines: number;
+    instructionCount: number;
+  };
 }
 export interface Document {
   id: string;

@@ -448,9 +448,9 @@ class MainWindow(QMainWindow):
             "Analisis semantico de Python",
             "============================",
             f"Estado: {status}",
-            "",
-            "Validaciones: ambitos, nombres, simbolos, tipos comunes, importaciones, llamadas y contexto del compilador.",
         ]
+        if result.semantic_checks:
+            lines += ["", "Validaciones realizadas:"] + [f"- {check}" for check in result.semantic_checks]
         if result.semantic_warnings:
             lines += ["", "Advertencias:"] + [f"- {error.code}: {error.explanation}" for error in result.semantic_warnings]
         if result.semantic_scopes:

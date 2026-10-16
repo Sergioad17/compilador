@@ -256,7 +256,7 @@ export function useIdeController() {
     if (lower === "/tipos")
       return "Python: int, float, bool, str, list, tuple, dict, set y clases. Las anotaciones son opcionales.";
     if (lower === "/reglas")
-      return "PY00: lexico. PY01: sintaxis. PY02: funciones. PY03: clases. PY04: asignaciones. PY05-PY06: seguridad. PY07: nombres. PY08: contexto. PY09: argumentos.";
+      return "PY00: lexico. PY01: sintaxis. PY02: funciones. PY03: clases. PY04: asignaciones. PY05-PY06: seguridad. PY07: nombres. PY08: contexto. PY09: argumentos. PY10: anotaciones de tipo.";
     if (
       lower.startsWith("/") &&
       !chatCommands.some((c) => lower.split(" ")[0] === c.toLowerCase())

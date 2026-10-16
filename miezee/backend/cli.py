@@ -6,12 +6,15 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from miezee.backend.contract import analyze_python, generate_intermediate_python, run_python, translate_python_to_miezee
+from miezee.backend.contract import analyze_lexical_python, analyze_python, analyze_semantic_python, analyze_syntax_python, generate_intermediate_python, run_python, translate_python_to_miezee
 from miezee.backend.chat_service import chat, status
 from miezee.services.settings_service import SettingsService
 
 
 COMMANDS: dict[str, Callable[[str], dict[str, Any]]] = {
+    "lexical": analyze_lexical_python,
+    "syntax": analyze_syntax_python,
+    "semantic": analyze_semantic_python,
     "analyze": analyze_python,
     "translate": translate_python_to_miezee,
     "intermediate": generate_intermediate_python,
