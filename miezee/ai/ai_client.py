@@ -19,6 +19,8 @@ OFFLINE_MESSAGE = (
 
 
 class AIClient:
+    timeout_seconds = 120
+
     def __init__(self) -> None:
         self.settings = SettingsService.load()
         self.available = self.settings.ai_provider == "ollama" and bool(self.settings.ollama_model)
@@ -82,7 +84,7 @@ class AIClient:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=120) as response:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")

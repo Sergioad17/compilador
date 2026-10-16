@@ -262,7 +262,7 @@ print(area)
 Traduccion educativa:
 
 ```miezee
-DEFINIR area COMO DESCONOCIDO = base * altura / 2
+GUARDAR (base * altura / 2) EN area
 MOSTRAR area
 ```
 

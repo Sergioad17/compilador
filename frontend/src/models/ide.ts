@@ -100,6 +100,14 @@ export interface ChatAttachment {
   content: string;
   size: number;
   truncated: boolean;
+  selectionContext?: {
+    sourceName: string;
+    language: "python" | "miezee-educativo";
+    startLine: number;
+    endLine: number;
+    fullSource: string;
+    relatedPythonSource?: string;
+  };
 }
 export interface Preferences {
   theme: "Default" | "Morado";

@@ -32,6 +32,7 @@ export function useChatController(options: {
     },
   ]);
   const [busy, setBusy] = useState(false);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const requestId = useRef(0);
   const nativeId = useRef<string>();
   const add = (role: ChatMessage["role"], text: string, attachments?: string[]) =>
@@ -121,11 +122,25 @@ export function useChatController(options: {
       if (token === requestId.current) setBusy(false);
     }
   }
+  function addAttachments(items: ChatAttachment[]) {
+    setAttachments((current) => {
+      const unique = [...current];
+      for (const item of items) {
+        if (!unique.some((existing) => existing.id === item.id)) unique.push(item);
+      }
+      return unique.slice(0, 5);
+    });
+  }
   return {
     messages,
     busy,
+    attachments,
     send,
     attachFiles: (paths?: string[]) => backend.attachChatFiles(paths),
+    addAttachments,
+    removeAttachment: (id: string) =>
+      setAttachments((items) => items.filter((item) => item.id !== id)),
+    clearAttachments: () => setAttachments([]),
     clear: () => setMessages([]),
     stop: () => {
       requestId.current++;

@@ -23,6 +23,7 @@ import { WindowControls } from "./views/WindowControls";
 import { SettingsView } from "./views/SettingsView";
 import { LexicalAnalysisView } from "./views/LexicalAnalysisView";
 import { SyntaxAnalysisView } from "./views/SyntaxAnalysisView";
+import { TranslationView } from "./views/TranslationView";
 import { AIStatusIndicator } from "./views/AIStatusIndicator";
 import { CommandPalette, type Action } from "./views/CommandPalette";
 import {
@@ -437,12 +438,18 @@ export function App() {
           <div className="editor-panel">
             <CodeEditor
               id={ide.active.id}
+              name={ide.active.name}
               source={ide.active.source}
               errors={ide.analysis?.errors ?? []}
               onChange={ide.update}
               line={ide.line}
               fontSize={ide.preferences.fontSize}
               onCursorChange={ide.setCursor}
+              attachToChat={(attachment) => {
+                ide.chat.addAttachments([attachment]);
+                if (!ide.visibility.chat) ide.toggle("chat");
+              }}
+              openCommandPalette={() => ide.setPaletteOpen(true)}
             />
           </div>
           <div
@@ -466,7 +473,7 @@ export function App() {
               ))}
             </nav>
             <div
-              className={`panel-content ${ide.panel === "Consola" ? "console-content" : ""}`}
+              className={`panel-content ${ide.panel === "Consola" ? "console-content" : ""} ${ide.panel === "Traduccion" ? "translation-content" : ""}`}
             >
               {ide.notice && (
                 <p role="alert" className="notice">
@@ -568,7 +575,21 @@ export function App() {
                   </table>
                 </div>
               )}
-              {ide.panel === "Traduccion" && <pre>{ide.translation}</pre>}
+              {ide.panel === "Traduccion" && (
+                <TranslationView
+                  translation={ide.translation}
+                  sourceName={ide.active.name}
+                  originalSource={ide.active.source}
+                  fontSize={ide.preferences.fontSize}
+                  refresh={() => {
+                    void ide.perform("translate");
+                  }}
+                  attachToChat={(attachment) => {
+                    ide.chat.addAttachments([attachment]);
+                    if (!ide.visibility.chat) ide.toggle("chat");
+                  }}
+                />
+              )}
               {ide.panel === "Codigo intermedio" && <pre className="intermediate-code">{ide.intermediate?.text || "Genera el codigo intermedio con F10."}</pre>}
               {ide.panel === "Consola" && (
                 <ConsoleView

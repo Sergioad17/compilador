@@ -12,13 +12,16 @@ export function ChatView(props: {
   busy: boolean;
   send: (text: string, attachments?: ChatAttachment[]) => void;
   attachFiles: (paths?: string[]) => Promise<{ attachments: ChatAttachment[]; errors: string[] }>;
+  attachments: ChatAttachment[];
+  addAttachments: (attachments: ChatAttachment[]) => void;
+  removeAttachment: (id: string) => void;
+  clearAttachments: () => void;
   stop: () => void;
   clear: () => void;
   explain: () => void;
 }) {
   const [text, setText] = useState("");
   const [selected, setSelected] = useState(0);
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const [dragging, setDragging] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -72,14 +75,9 @@ export function ChatView(props: {
     setAttachmentError("");
     try {
       const result = await props.attachFiles(paths);
-      setAttachments((current) => {
-        const unique = [...current];
-        for (const item of result.attachments) {
-          if (!unique.some((existing) => existing.id === item.id)) unique.push(item);
-        }
-        if (unique.length > 5) setAttachmentError("Solo se admiten 5 archivos por consulta.");
-        return unique.slice(0, 5);
-      });
+      if (props.attachments.length + result.attachments.length > 5)
+        setAttachmentError("Solo se admiten 5 archivos por consulta.");
+      props.addAttachments(result.attachments);
       if (result.errors.length) setAttachmentError(result.errors.join("\n"));
       field.current?.focus();
     } catch (error) {
@@ -92,9 +90,9 @@ export function ChatView(props: {
   }
   function submit() {
     if (!text.trim() || props.busy) return;
-    props.send(text.trim(), attachments);
+    props.send(text.trim(), props.attachments);
     setText("");
-    setAttachments([]);
+    props.clearAttachments();
     setAttachmentError("");
   }
   return (
@@ -165,9 +163,9 @@ export function ChatView(props: {
           </div>
         )}
         <div className="composer-content">
-          {attachments.length > 0 && (
+          {props.attachments.length > 0 && (
             <div className="attachment-list" aria-label="Archivos adjuntos">
-              {attachments.map((attachment) => (
+              {props.attachments.map((attachment) => (
                 <span
                   className="attachment-chip"
                   key={attachment.id}
@@ -178,11 +176,7 @@ export function ChatView(props: {
                   <button
                     type="button"
                     title={`Quitar ${attachment.name}`}
-                    onClick={() =>
-                      setAttachments((items) =>
-                        items.filter((item) => item.id !== attachment.id),
-                      )
-                    }
+                    onClick={() => props.removeAttachment(attachment.id)}
                   ><X size={12} /></button>
                 </span>
               ))}
@@ -194,7 +188,7 @@ export function ChatView(props: {
             value={text}
             onChange={(event) => setText(event.target.value)}
             aria-label="Mensaje al asistente"
-            placeholder={attachments.length ? "Indica que quieres hacer con los archivos..." : "Mensaje..."}
+            placeholder={props.attachments.length ? "Indica que quieres hacer con el contenido cargado..." : "Mensaje..."}
             onKeyDown={(event) => {
             if (
               commands.length &&
@@ -221,7 +215,7 @@ export function ChatView(props: {
           type="button"
           className="attach-button"
           title="Adjuntar documentos o imagenes"
-          disabled={props.busy || attachments.length >= 5}
+          disabled={props.busy || props.attachments.length >= 5}
           onClick={() => void addAttachments()}
         >
           <Paperclip size={17} />
