@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
     def translate_code(self) -> None:
         self.bottom_tabs.setVisible(True)
         self.bottom_tabs.setCurrentWidget(self.result_output)
-        self.result_output.setPlainText("Traduccion aproximada a Miezee:\n\n" + self.translator.translate(self.current_text()))
+        self.result_output.setPlainText("Traduccion educativa a Miezee (no ejecutable):\n\n" + self.translator.translate(self.current_text()))
 
     def _result_text(self, result: PythonAnalysisResult) -> str:
         lines = ["Entrada Python:", result.source, "", "Estado final:", "Correcto" if result.ok else "Con errores", "", "Reglas aplicadas:"]

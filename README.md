@@ -2,7 +2,7 @@
 
 MakeitEasy Miezee es un prototipo academico de IDE low-code. La version actual usa **Python como lenguaje principal** para que la IA local pueda generar programas, interfaces sencillas, logica de consola, manejo de archivos y bases de datos con menos friccion.
 
-El lenguaje Miezee original ya no es el flujo principal. Se conserva como apoyo educativo: el IDE puede traducir codigo Python a una version aproximada de Miezee para explicar que hace el programa.
+El lenguaje Miezee original ya no es el flujo principal. Se conserva como apoyo educativo: el IDE traduce codigo Python a una representacion Miezee estructurada para explicar que hace el programa.
 
 ## Estado actual
 
@@ -13,10 +13,28 @@ El lenguaje Miezee original ya no es el flujo principal. Se conserva como apoyo 
 - Modelo sugerido: `qwen3:14b`.
 - Ejecucion: consola integrada e interfaces graficas.
 - Vista previa: detecta interfaces Python y abre la pantalla en una ventana real.
-- Traduccion: Python a Miezee aproximado.
+- Traduccion: Python a Miezee educativo y no ejecutable.
 - Pruebas: `unittest`.
 
 La IA ayuda a generar, corregir y explicar codigo, pero la validacion final del programa la hace el analizador local.
+
+## Nuevo frontend Tauri
+
+Se esta migrando la interfaz a Tauri + React + TypeScript + Monaco, siguiendo MVC.
+El nuevo frontend incluye archivos/carpetas, analisis, simbolos, traduccion, consola
+interactiva, vista previa, chat Ollama, temas y menus. `app.py` sigue abriendo
+PySide6 durante la verificacion de la migracion.
+
+Con Node, Rust y las herramientas C++ instaladas:
+
+```powershell
+cd frontend
+npm install
+npm run desktop
+```
+
+El detalle de arquitectura, pruebas y paridad esta en [frontend/README.md](frontend/README.md).
+La distribucion del backend Python fuera del repositorio sigue pendiente.
 
 ## Instalacion en Windows
 
@@ -62,7 +80,7 @@ Si Ollama no esta disponible, el analizador, la consola, los menus, la tabla de 
 3. Usa **Analizar** para validar el codigo.
 4. Usa **Ejecutar programa** para correr programas de consola.
 5. Usa **Vista previa** para abrir interfaces graficas generadas con `tkinter`, `customtkinter` o `PySide6`.
-6. Usa **Traducir codigo** para ver una traduccion educativa aproximada a Miezee.
+6. Usa **Traducir codigo** para ver una traduccion educativa estructurada a Miezee.
 
 Ejemplo de programa interactivo:
 
@@ -102,16 +120,20 @@ root.mainloop()
 
 ## Analizador Python seguro
 
-El analizador local revisa el codigo con `ast`, sin ejecutar el programa durante el analisis.
+El analizador local realiza fases lexica, sintactica y semantica sin ejecutar el programa durante el analisis. La fase lexica usa `tokenize` y la sintactica usa `ast`, ambos componentes oficiales de la version de Python instalada.
 
 Funciones actuales:
 
-- Detecta errores de sintaxis Python.
+- Clasifica tokens de Python con lexema, tipo, linea y columna.
+- Detecta caracteres y operadores invalidos, cadenas sin cerrar e indentacion lexicamente incorrecta como `PY-LEXICO` (`PY00`).
+- Detecta estructuras que incumplen la gramatica de Python como `PY-SINTAXIS` (`PY01`).
 - Bloquea importaciones peligrosas como `os`, `sys`, `subprocess`, `socket`, `requests`, `urllib`, `ctypes` y similares.
 - Bloquea llamadas dinamicas o peligrosas como `eval`, `exec`, `compile`, `__import__`, `globals`, `locals` y `vars`.
 - Permite librerias utiles para el prototipo: `tkinter`, `customtkinter`, `PySide6`, `sqlite3`, `json`, `csv`, `math`, `pathlib`, `datetime` y `random`.
 - Construye una tabla de simbolos con variables, funciones y clases.
 - Infiere tipos comunes: `Int`, `Double`, `Texto`, `Boolean`, `Funcion`, `Clase` e `Inferido`.
+
+La traduccion educativa cubre bloques anidados, `if/elif/else`, `match/case`, ciclos, colecciones, modulos, clases, excepciones, interfaces, SQLite, archivos y consola. Las construcciones avanzadas o futuras se preservan mediante una representacion universal, por lo que nunca se presentan como codigo ejecutable Miezee. Consulta [la especificacion de Miezee educativo](docs/MIEZEE_EDUCATIVO.md).
 
 ## Consola interactiva
 
@@ -210,7 +232,7 @@ Atajos:
 
 ## Miezee como traduccion educativa
 
-El boton **Traducir codigo** genera una traduccion aproximada desde Python hacia Miezee.
+El boton **Traducir codigo** genera una traduccion educativa estructurada desde Python hacia Miezee.
 
 Ejemplo:
 
@@ -219,7 +241,7 @@ area = base * altura / 2
 print(area)
 ```
 
-Traduccion aproximada:
+Traduccion educativa:
 
 ```miezee
 DEFINIR area COMO DESCONOCIDO = base * altura / 2
@@ -370,7 +392,7 @@ MOSTRAR area
 - `app.py`: punto de entrada.
 - `miezee/core/python_analyzer.py`: analizador seguro para Python.
 - `miezee/core/python_executor.py`: ejecutor auxiliar para pruebas de consola.
-- `miezee/core/python_translator.py`: traduccion aproximada de Python a Miezee.
+- `miezee/core/python_translator.py`: traduccion educativa estructurada de Python a Miezee.
 - `miezee/core/semantic_analyzer.py`: analizador del lenguaje Miezee original.
 - `miezee/core/parser.py`: parser del lenguaje Miezee original.
 - `miezee/core/lexer.py`: lexer del lenguaje Miezee original.
@@ -442,7 +464,7 @@ La suite cubre:
 
 - La IA local no tiene acceso a Internet desde la aplicacion.
 - La vista previa abre interfaces como ventana separada; no incrusta la GUI dentro del panel.
-- La traduccion a Miezee es aproximada y educativa.
+- La traduccion a Miezee es educativa, estructurada y no ejecutable; Python sigue siendo el lenguaje original.
 - El modo seguro bloquea librerias y llamadas peligrosas, por lo que no todo codigo Python arbitrario sera aceptado.
 - Las bases de datos estan pensadas para `sqlite3`; no hay conexion visual avanzada a motores externos.
 
@@ -456,7 +478,7 @@ La suite cubre:
 6. Ejecutar con `F6` y usar la consola interactiva.
 7. Pedir una pantalla sencilla y abrirla con `F7`.
 8. Mostrar la tabla de simbolos.
-9. Usar **Traducir codigo** para ver la version aproximada en Miezee.
+9. Usar **Traducir codigo** para ver la representacion educativa en Miezee.
 10. Ejecutar las pruebas con `python -m unittest discover -s tests -v`.
 
 ## Estado verificado

@@ -1,4 +1,8 @@
 import ast
+import io
+import keyword
+import token as token_module
+import tokenize
 from dataclasses import dataclass, field
 
 from miezee.core.data_types import DataType, NUMERIC_TYPES, promoted_numeric_type
@@ -36,6 +40,18 @@ BLOCKED_IMPORT_ROOTS = {
 BLOCKED_CALLS = {"eval", "exec", "compile", "__import__", "globals", "locals", "vars"}
 
 
+@dataclass(frozen=True)
+class PythonToken:
+    kind: str
+    category: str
+    exact_kind: str
+    lexeme: str
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+
+
 @dataclass
 class PythonAnalysisResult:
     source: str
@@ -43,6 +59,7 @@ class PythonAnalysisResult:
     symbol_table: SymbolTable = field(default_factory=SymbolTable)
     rules_applied: list[str] = field(default_factory=list)
     ui_screen: UIScreen = field(default_factory=UIScreen)
+    tokens: list[PythonToken] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -53,7 +70,11 @@ class PythonAnalyzer:
     def analyze(self, source: str) -> PythonAnalysisResult:
         errors: list[SemanticError] = []
         symbols = SymbolTable()
-        rules = ["PY01"]
+        rules = ["PY00", "PY01"]
+        tokens, lexical_errors = self._tokenize(source)
+        errors.extend(lexical_errors)
+        if errors:
+            return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
         try:
             tree = ast.parse(source or "\n")
         except SyntaxError as exc:
@@ -67,7 +88,7 @@ class PythonAnalyzer:
                     "Corrige la sintaxis de Python indicada.",
                 )
             )
-            return PythonAnalysisResult(source, errors, symbols, rules)
+            return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
 
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -88,7 +109,85 @@ class PythonAnalyzer:
             elif isinstance(node, ast.Call):
                 self._analyze_call(node, errors)
 
-        return PythonAnalysisResult(source, errors, symbols, rules)
+        return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
+
+    def _tokenize(self, source: str) -> tuple[list[PythonToken], list[SemanticError]]:
+        tokens: list[PythonToken] = []
+        errors: list[SemanticError] = []
+        lines = source.splitlines()
+        try:
+            generated = tokenize.generate_tokens(io.StringIO(source).readline)
+            for item in generated:
+                tokens.append(
+                    PythonToken(
+                        token_module.tok_name[item.type],
+                        self._token_category(item),
+                        token_module.tok_name[item.exact_type],
+                        item.string,
+                        item.start[0],
+                        item.start[1] + 1,
+                        item.end[0],
+                        item.end[1] + 1,
+                    )
+                )
+                invalid_operator = item.type == tokenize.OP and item.exact_type == tokenize.OP
+                if (item.type == tokenize.ERRORTOKEN and not item.string.isspace()) or invalid_operator:
+                    errors.append(
+                        self._lexical_error(
+                            item.start[0],
+                            lines,
+                            f"Token no valido: {item.string!r}.",
+                        )
+                    )
+        except (tokenize.TokenError, IndentationError) as exc:
+            if isinstance(exc, tokenize.TokenError):
+                message, position = exc.args
+                line = position[0]
+            else:
+                message = exc.msg
+                line = exc.lineno or 1
+            errors.append(self._lexical_error(line, lines, self._token_message(str(message))))
+        return tokens, self._unique_errors(errors)
+
+    def _token_category(self, item: tokenize.TokenInfo) -> str:
+        if item.type == tokenize.NAME:
+            return "KEYWORD" if keyword.iskeyword(item.string) else "IDENTIFIER"
+        if item.type == tokenize.NUMBER:
+            return "NUMBER"
+        if item.type == tokenize.STRING:
+            return "STRING"
+        if item.type == tokenize.OP:
+            return "OPERATOR"
+        return token_module.tok_name[item.type]
+
+    def _lexical_error(self, line: int, lines: list[str], explanation: str) -> SemanticError:
+        instruction = lines[line - 1].strip() if 0 < line <= len(lines) else ""
+        return SemanticError(
+            "PY-LEXICO",
+            line,
+            instruction,
+            explanation,
+            "PY00",
+            "Corrige el caracter, la cadena o la estructura de indentacion indicada.",
+        )
+
+    def _token_message(self, message: str) -> str:
+        translations = {
+            "EOF in multi-line statement": "La instruccion multilínea no fue cerrada.",
+            "EOF in multi-line string": "La cadena multilínea no fue cerrada.",
+            "unindent does not match any outer indentation level": "La sangria no coincide con ningun bloque exterior.",
+        }
+        return translations.get(message, message)
+
+    def _unique_errors(self, errors: list[SemanticError]) -> list[SemanticError]:
+        result: list[SemanticError] = []
+        seen: set[tuple[int, str]] = set()
+        for error in errors:
+            key = (error.line, error.explanation)
+            if key not in seen:
+                seen.add(key)
+                result.append(error)
+        return result
 
     def _analyze_import(self, node, errors: list[SemanticError]) -> None:
         names = []

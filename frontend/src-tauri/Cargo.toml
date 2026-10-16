@@ -1,0 +1,17 @@
+[package]
+name = "miezee_tauri_frontend"
+version = "0.1.0"
+description = "Miezee IDE Tauri frontend"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.15"
+
+[features]
+default = []

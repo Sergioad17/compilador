@@ -5,4 +5,7 @@ __pycache__/
 logs/
 config_local.json
 outputs/
-
+frontend/node_modules/
+frontend/dist/
+frontend/src-tauri/target/
+frontend/test-results/

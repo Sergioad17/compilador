@@ -6,6 +6,57 @@ from miezee.core.python_translator import PythonToMiezeeTranslator
 
 
 class PythonModeTest(unittest.TestCase):
+    def test_lexical_analysis_returns_complete_token_locations(self):
+        result = PythonAnalyzer().analyze('total = 12.5 + valor\nprint("ok")')
+
+        significant = [token for token in result.tokens if token.kind not in {"NL", "NEWLINE", "ENDMARKER"}]
+        self.assertTrue(result.ok)
+        self.assertEqual(significant[0].kind, "NAME")
+        self.assertEqual(significant[0].category, "IDENTIFIER")
+        self.assertEqual(significant[0].lexeme, "total")
+        self.assertEqual((significant[0].line, significant[0].column), (1, 1))
+        self.assertIn(("NUMBER", "12.5"), [(token.kind, token.lexeme) for token in significant])
+        self.assertIn(("STRING", '"ok"'), [(token.kind, token.lexeme) for token in significant])
+
+    def test_lexical_analysis_classifies_keywords_and_exact_operators(self):
+        result = PythonAnalyzer().analyze("if total >= 2:\n    pass")
+
+        keyword_token = next(token for token in result.tokens if token.lexeme == "if")
+        operator_token = next(token for token in result.tokens if token.lexeme == ">=")
+        self.assertEqual(keyword_token.category, "KEYWORD")
+        self.assertEqual(operator_token.category, "OPERATOR")
+        self.assertEqual(operator_token.exact_kind, "GREATEREQUAL")
+
+    def test_lexical_analysis_reports_invalid_character(self):
+        result = PythonAnalyzer().analyze("total = 2 $ 3")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0].code, "PY-LEXICO")
+        self.assertEqual(result.errors[0].line, 1)
+        self.assertEqual(result.errors[0].rule, "PY00")
+
+    def test_lexical_analysis_reports_unclosed_multiline_string(self):
+        result = PythonAnalyzer().analyze('texto = """sin cerrar')
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0].code, "PY-LEXICO")
+        self.assertIn("no fue cerrada", result.errors[0].explanation)
+
+    def test_lexical_analysis_reports_invalid_indentation(self):
+        source = "if True:\n    print('a')\n  print('b')"
+        result = PythonAnalyzer().analyze(source)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0].code, "PY-LEXICO")
+        self.assertEqual(result.errors[0].line, 3)
+
+    def test_syntax_analysis_reports_python_grammar_error(self):
+        result = PythonAnalyzer().analyze("if True print('falta dos puntos')")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0].code, "PY-SINTAXIS")
+        self.assertEqual(result.errors[0].rule, "PY01")
+
     def test_python_analyzer_accepts_safe_code(self):
         source = """import sqlite3
 nombre = "Ana"
