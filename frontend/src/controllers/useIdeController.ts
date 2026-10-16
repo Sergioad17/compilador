@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Analysis, Document, Panel, Preferences } from "../models/ide";
+import type { Analysis, Document, IntermediateCode, Panel, Preferences } from "../models/ide";
 import { backend } from "../services/backend";
 import { isTauri } from "@tauri-apps/api/core";
 import { useConsoleController } from "./useConsoleController";
@@ -12,6 +12,7 @@ export function useIdeController() {
   const [activeId, setActiveId] = useState("untitled");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [translation, setTranslation] = useState("");
+  const [intermediate, setIntermediate] = useState<IntermediateCode | null>(null);
   const [panel, setPanel] = useState<Panel>("Problemas");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -106,6 +107,7 @@ export function useIdeController() {
     revision.current++;
     setAnalysis(null);
     setTranslation("");
+    setIntermediate(null);
     setLine(null);
   }
   function select(id: string) {
@@ -254,7 +256,7 @@ export function useIdeController() {
     if (lower === "/tipos")
       return "Python: int, float, bool, str, list, tuple, dict, set y clases. Las anotaciones son opcionales.";
     if (lower === "/reglas")
-      return "PY01: sintaxis. PY02: funciones. PY03: clases. PY04: asignaciones. Las importaciones y llamadas tambien se validan con las reglas del analizador Python.";
+      return "PY00: lexico. PY01: sintaxis. PY02: funciones. PY03: clases. PY04: asignaciones. PY05-PY06: seguridad. PY07: nombres. PY08: contexto. PY09: argumentos.";
     if (
       lower.startsWith("/") &&
       !chatCommands.some((c) => lower.split(" ")[0] === c.toLowerCase())
@@ -330,6 +332,10 @@ export function useIdeController() {
         action = () => {
           void perform("translate");
         };
+      else if (key === "f10")
+        action = () => {
+          void perform("intermediate");
+        };
       if (action) {
         event.preventDefault();
         action();
@@ -338,24 +344,30 @@ export function useIdeController() {
     window.addEventListener("keydown", keyboard, true);
     return () => window.removeEventListener("keydown", keyboard, true);
   });
-  async function perform(operation: "analyze" | "translate") {
+  async function perform(operation: "analyze" | "semantic" | "translate" | "intermediate") {
     if (busy) return;
     const version = revision.current;
     setBusy(true);
     setNotice("");
     setVisibility((value) => ({ ...value, bottom: true }));
     try {
-      if (operation === "analyze") {
+      if (operation === "analyze" || operation === "semantic") {
         const result = await backend.analyze(active.source);
         if (version === revision.current) {
           setAnalysis(result);
-          setPanel("Problemas");
+          setPanel(operation === "semantic" ? "Semantico" : "Problemas");
         }
-      } else {
+      } else if (operation === "translate") {
         const result = await backend.translate(active.source);
         if (version === revision.current) {
           setTranslation(result.translation);
           setPanel("Traduccion");
+        }
+      } else {
+        const result = await backend.intermediate(active.source);
+        if (version === revision.current) {
+          setIntermediate(result);
+          setPanel("Codigo intermedio");
         }
       }
     } catch (error) {
@@ -369,6 +381,7 @@ export function useIdeController() {
     active,
     analysis,
     translation,
+    intermediate,
     panel,
     busy,
     notice,

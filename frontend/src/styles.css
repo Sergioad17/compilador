@@ -229,6 +229,19 @@ pre {
     13px Consolas,
     monospace;
 }
+.semantic-report h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.semantic-report ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.intermediate-code {
+  margin: 0;
+  tab-size: 4;
+}
 aside.assistant {
   border-left: 1px solid var(--border);
   background: #222222;

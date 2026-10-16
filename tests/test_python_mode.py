@@ -57,6 +57,28 @@ class PythonModeTest(unittest.TestCase):
         self.assertEqual(result.errors[0].code, "PY-SINTAXIS")
         self.assertEqual(result.errors[0].rule, "PY01")
 
+    def test_semantic_context_rejects_return_and_break_outside_blocks(self):
+        for source in ["return 1", "break", "continue", "nonlocal nombre"]:
+            with self.subTest(source=source):
+                result = PythonAnalyzer().analyze(source)
+                self.assertFalse(result.ok)
+                self.assertEqual(result.errors[0].code, "PY-SEMANTICA")
+                self.assertEqual(result.errors[0].rule, "PY08")
+
+    def test_semantic_analysis_validates_local_function_arguments(self):
+        source = """def calcular(base, altura, *, unidad):
+    return base * altura
+resultado = calcular(10, unidad='cm')
+"""
+        result = PythonAnalyzer().analyze(source)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.errors[0].code, "PY-ARGUMENTOS")
+        self.assertEqual(result.errors[0].rule, "PY09")
+
+        repeated = PythonAnalyzer().analyze("def f(valor):\n    return valor\nf(1, valor=2)")
+        self.assertFalse(repeated.ok)
+        self.assertIn("repetidos", repeated.errors[0].explanation)
+
     def test_python_analyzer_accepts_safe_code(self):
         source = """import sqlite3
 nombre = "Ana"

@@ -135,6 +135,12 @@ Funciones actuales:
 
 La traduccion educativa cubre bloques anidados, `if/elif/else`, `match/case`, ciclos, colecciones, modulos, clases, excepciones, interfaces, SQLite, archivos y consola. Las construcciones avanzadas o futuras se preservan mediante una representacion universal, por lo que nunca se presentan como codigo ejecutable Miezee. Consulta [la especificacion de Miezee educativo](docs/MIEZEE_EDUCATIVO.md).
 
+### Analisis semantico y codigo intermedio
+
+El panel **Semantico** muestra el estado de las validaciones, los ambitos producidos por `symtable`, los identificadores y sus roles, las advertencias de nombres y los errores de contexto detectados por el compilador oficial de Python. Incluye restricciones de importaciones y llamadas del modo seguro.
+
+El comando **Generar codigo intermedio** (`F10`) produce TAC para el archivo Python actual. Incluye temporales, etiquetas, saltos, ciclos, funciones, llamadas, colecciones, clases, excepciones y recursos. Solo se genera cuando el archivo supera los analisis previos. Consulta [la especificacion del codigo intermedio](docs/CODIGO_INTERMEDIO.md).
+
 ## Consola interactiva
 
 La pestana **Consola** permite ejecutar programas que usan `input()` y `print()`.

@@ -10,6 +10,7 @@ import {
   PanelBottom,
   Folder,
   Eye,
+  Binary,
 } from "lucide-react";
 import { useIdeController } from "./controllers/useIdeController";
 import { useLayoutController } from "./controllers/useLayoutController";
@@ -38,6 +39,8 @@ const panels: Panel[] = [
   "Resultado",
   "Consola",
   "Tabla de simbolos",
+  "Semantico",
+  "Codigo intermedio",
   "Vista previa",
   "Traduccion",
 ];
@@ -168,6 +171,10 @@ export function App() {
         run: () => show("Tabla de simbolos"),
       },
       {
+        name: "Mostrar analisis semantico",
+        run: () => { void ide.perform("semantic"); },
+      },
+      {
         name: "Mostrar u ocultar chat",
         shortcut: "Ctrl+Shift+C",
         run: () => ide.toggle("chat"),
@@ -204,6 +211,11 @@ export function App() {
         run: () => {
           void ide.perform("translate");
         },
+      },
+      {
+        name: "Generar codigo intermedio",
+        shortcut: "F10",
+        run: () => { void ide.perform("intermediate"); },
       },
       {
         name: "Detener programa",
@@ -400,6 +412,13 @@ export function App() {
               >
                 <Languages size={18} />
               </button>
+              <button
+                title="Generar codigo intermedio (F10)"
+                disabled={ide.busy}
+                onClick={() => { void ide.perform("intermediate"); }}
+              >
+                <Binary size={18} />
+              </button>
             </div>
           </div>
           <div className="editor-panel">
@@ -511,7 +530,27 @@ export function App() {
                   </p>
                 </>
               )}
+              {ide.panel === "Semantico" && ide.analysis && (
+                <div className="semantic-report">
+                  <p className={ide.analysis.semantic.ok ? "success" : "notice"}>
+                    Estado semantico: {ide.analysis.semantic.status === "ok" ? "Correcto" : ide.analysis.semantic.status === "error" ? "Con errores" : "No ejecutado por errores previos"}
+                  </p>
+                  <h3>Validaciones realizadas</h3>
+                  <ul>{ide.analysis.semantic.checks.map(check => <li key={check}>{check}</li>)}</ul>
+                  {ide.analysis.semantic.warnings.length > 0 && (
+                    <><h3>Advertencias</h3><ul>{ide.analysis.semantic.warnings.map((warning, index) => <li key={index}>{warning.code}: {warning.explanation}</li>)}</ul></>
+                  )}
+                  <h3>Ambitos detectados</h3>
+                  <table>
+                    <thead><tr><th>Ambito</th><th>Tipo</th><th>Linea</th><th>Identificadores y roles</th></tr></thead>
+                    <tbody>{ide.analysis.semantic.scopes.map(scope => (
+                      <tr key={scope.name}><td>{scope.name}</td><td>{scope.type}</td><td>{scope.line}</td><td>{scope.identifiers.map(item => `${item.name} (${item.roles.join(", ")})`).join("; ")}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
               {ide.panel === "Traduccion" && <pre>{ide.translation}</pre>}
+              {ide.panel === "Codigo intermedio" && <pre className="intermediate-code">{ide.intermediate?.text || "Genera el codigo intermedio con F10."}</pre>}
               {ide.panel === "Consola" && (
                 <ConsoleView
                   {...ide.terminal}

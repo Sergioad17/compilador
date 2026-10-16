@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Analysis, Document } from "../models/ide";
+import type { Analysis, Document, IntermediateCode } from "../models/ide";
 
 export async function request<T>(
   command: string,
@@ -17,6 +17,11 @@ export const backend = {
   translate: (source: string) =>
     request<{ translation: string }>("python_request", {
       operation: "translate",
+      source,
+    }),
+  intermediate: (source: string) =>
+    request<IntermediateCode>("python_request", {
+      operation: "intermediate",
       source,
     }),
   examples: () => request<Document[]>("list_examples"),

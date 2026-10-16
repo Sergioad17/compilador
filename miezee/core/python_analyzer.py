@@ -1,6 +1,8 @@
 import ast
 import io
 import keyword
+import builtins
+import symtable
 import token as token_module
 import tokenize
 from dataclasses import dataclass, field
@@ -60,6 +62,8 @@ class PythonAnalysisResult:
     rules_applied: list[str] = field(default_factory=list)
     ui_screen: UIScreen = field(default_factory=UIScreen)
     tokens: list[PythonToken] = field(default_factory=list)
+    semantic_scopes: list[dict] = field(default_factory=list)
+    semantic_warnings: list[SemanticError] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -76,7 +80,7 @@ class PythonAnalyzer:
         if errors:
             return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
         try:
-            tree = ast.parse(source or "\n")
+            tree = compile(source or "\n", "<miezee>", "exec", ast.PyCF_ONLY_AST)
         except SyntaxError as exc:
             errors.append(
                 SemanticError(
@@ -89,6 +93,24 @@ class PythonAnalyzer:
                 )
             )
             return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
+
+        try:
+            compile(source or "\n", "<miezee>", "exec")
+        except SyntaxError as exc:
+            errors.append(
+                SemanticError(
+                    "PY-SEMANTICA",
+                    exc.lineno or 1,
+                    (exc.text or "").strip(),
+                    exc.msg,
+                    "PY08",
+                    "Corrige el contexto de la instruccion dentro del programa Python.",
+                )
+            )
+            self._add_rule(rules, "PY08")
+            return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
+
+        signatures = self._function_signatures(tree)
 
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -108,8 +130,81 @@ class PythonAnalyzer:
                 self._add_rule(rules, "PY04")
             elif isinstance(node, ast.Call):
                 self._analyze_call(node, errors)
+                self._analyze_signature(node, signatures, errors, rules)
 
-        return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens)
+        scopes, warnings = self._semantic_scope_report(source)
+        return PythonAnalysisResult(source, errors, symbols, rules, tokens=tokens, semantic_scopes=scopes, semantic_warnings=warnings)
+
+    def _function_signatures(self, tree: ast.AST) -> dict[str, dict]:
+        signatures = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            positional = node.args.posonlyargs + node.args.args
+            signatures[node.name] = {
+                "positional": [item.arg for item in positional],
+                "required": len(positional) - len(node.args.defaults),
+                "vararg": node.args.vararg is not None,
+                "keywords": {item.arg for item in positional + node.args.kwonlyargs},
+                "required_keywords": {item.arg for item, default in zip(node.args.kwonlyargs, node.args.kw_defaults) if default is None},
+                "kwarg": node.args.kwarg is not None,
+            }
+        return signatures
+
+    def _analyze_signature(self, node: ast.Call, signatures: dict[str, dict], errors: list[SemanticError], rules: list[str]) -> None:
+        if not isinstance(node.func, ast.Name) or node.func.id not in signatures:
+            return
+        signature = signatures[node.func.id]
+        if any(isinstance(item, ast.Starred) for item in node.args) or any(item.arg is None for item in node.keywords):
+            return
+        keyword_names = {item.arg for item in node.keywords}
+        supplied_required = len(node.args) + len(keyword_names.intersection(signature["positional"][:signature["required"]]))
+        problems = []
+        if supplied_required < signature["required"]:
+            problems.append(f"faltan {signature['required'] - supplied_required} argumentos requeridos")
+        if not signature["vararg"] and len(node.args) > len(signature["positional"]):
+            problems.append("hay demasiados argumentos posicionales")
+        repeated = set(signature["positional"][:len(node.args)]).intersection(keyword_names)
+        if repeated:
+            problems.append("argumentos repetidos: " + ", ".join(sorted(repeated)))
+        missing_kw = signature["required_keywords"] - keyword_names
+        if missing_kw:
+            problems.append("faltan argumentos nombrados: " + ", ".join(sorted(missing_kw)))
+        unknown = keyword_names - signature["keywords"]
+        if unknown and not signature["kwarg"]:
+            problems.append("argumentos nombrados desconocidos: " + ", ".join(sorted(unknown)))
+        if not problems:
+            return
+        self._add_rule(rules, "PY09")
+        errors.append(SemanticError("PY-ARGUMENTOS", node.lineno, ast.unparse(node), f"Llamada incompatible con la firma de '{node.func.id}': " + "; ".join(problems) + ".", "PY09", "Revisa la cantidad y los nombres de los argumentos.", [node.func.id]))
+
+    def _semantic_scope_report(self, source: str) -> tuple[list[dict], list[SemanticError]]:
+        root = symtable.symtable(source or "\n", "<miezee>", "exec")
+        scopes: list[dict] = []
+        warnings: list[SemanticError] = []
+        builtin_names = set(dir(builtins))
+
+        def visit(table, parent: str = "") -> None:
+            path = f"{parent}.{table.get_name()}" if parent else table.get_name()
+            identifiers = []
+            for name in sorted(table.get_identifiers()):
+                symbol = table.lookup(name)
+                roles = []
+                for predicate, role in [
+                    (symbol.is_parameter, "parametro"), (symbol.is_imported, "importado"),
+                    (symbol.is_assigned, "asignado"), (symbol.is_referenced, "usado"),
+                    (symbol.is_global, "global"), (symbol.is_nonlocal, "no_local"),
+                    (symbol.is_free, "libre"), (symbol.is_namespace, "espacio"),
+                ]:
+                    if predicate(): roles.append(role)
+                identifiers.append({"name": name, "roles": roles})
+                if table.get_type() == "module" and symbol.is_referenced() and symbol.is_global() and not symbol.is_assigned() and not symbol.is_imported() and name not in builtin_names:
+                    warnings.append(SemanticError("PY-NOMBRE", 1, name, f"El nombre global '{name}' se usa sin una definicion estatica visible.", "PY07", "Declara o importa el nombre antes de utilizarlo.", [name]))
+            scopes.append({"name": path, "type": table.get_type(), "line": table.get_lineno(), "identifiers": identifiers})
+            for child in table.get_children(): visit(child, path)
+
+        visit(root)
+        return scopes, warnings
 
     def _tokenize(self, source: str) -> tuple[list[PythonToken], list[SemanticError]]:
         tokens: list[PythonToken] = []

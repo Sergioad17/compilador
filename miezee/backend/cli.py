@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from miezee.backend.contract import analyze_python, run_python, translate_python_to_miezee
+from miezee.backend.contract import analyze_python, generate_intermediate_python, run_python, translate_python_to_miezee
 from miezee.backend.chat_service import chat, status
 from miezee.services.settings_service import SettingsService
 
@@ -14,6 +14,7 @@ from miezee.services.settings_service import SettingsService
 COMMANDS: dict[str, Callable[[str], dict[str, Any]]] = {
     "analyze": analyze_python,
     "translate": translate_python_to_miezee,
+    "intermediate": generate_intermediate_python,
     "run": run_python,
     "chat": lambda source: chat(json.loads(source)),
     "status": lambda source: status(json.loads(source)),

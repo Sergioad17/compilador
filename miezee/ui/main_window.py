@@ -19,6 +19,7 @@ from PySide6.QtCore import QProcess, QProcessEnvironment, Qt
 
 from miezee.ai.ai_client import AIClient
 from miezee.core.python_analyzer import PythonAnalyzer, PythonAnalysisResult
+from miezee.core.intermediate_code import PythonIntermediateCodeGenerator
 from miezee.core.python_translator import PythonToMiezeeTranslator
 from miezee.core.ui_model import UIScreen
 from miezee.services.file_service import FileService
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
         self.project_root = self.root / "examples"
         self.analyzer = PythonAnalyzer()
         self.translator = PythonToMiezeeTranslator()
+        self.intermediate_generator = PythonIntermediateCodeGenerator()
         self.last_result: PythonAnalysisResult | None = None
         self.current_path: Path | None = None
         self.python_process: QProcess | None = None
@@ -61,6 +63,10 @@ class MainWindow(QMainWindow):
         self.problems = ProblemsPanel()
         self.result_output = QPlainTextEdit()
         self.result_output.setReadOnly(True)
+        self.semantic_output = QPlainTextEdit()
+        self.semantic_output.setReadOnly(True)
+        self.intermediate_output = QPlainTextEdit()
+        self.intermediate_output.setReadOnly(True)
         self.console_output = ConsolePanel()
         self.console_output.command_submitted.connect(self.execute_console_command)
         self.symbols = SymbolTablePanel()
@@ -68,6 +74,8 @@ class MainWindow(QMainWindow):
         self.bottom_tabs = QTabWidget()
         self.bottom_tabs.addTab(self.problems, "Problemas")
         self.bottom_tabs.addTab(self.result_output, "Resultado")
+        self.bottom_tabs.addTab(self.semantic_output, "Semantico")
+        self.bottom_tabs.addTab(self.intermediate_output, "Codigo intermedio")
         self.bottom_tabs.addTab(self.console_output, "Consola")
         self.bottom_tabs.addTab(self.symbols, "Tabla de simbolos")
         self.bottom_tabs.addTab(self.preview, "Vista previa")
@@ -128,6 +136,7 @@ class MainWindow(QMainWindow):
         view_menu = menu_bar.addMenu("Ver")
         view_menu.addAction(self._menu_action("Mostrar vista previa", "F7", self.show_preview))
         view_menu.addAction(self._menu_action("Mostrar tabla de simbolos", "", lambda: self.bottom_tabs.setCurrentWidget(self.symbols)))
+        view_menu.addAction(self._menu_action("Mostrar analisis semantico", "", self.show_semantic_analysis))
         view_menu.addSeparator()
         view_menu.addAction(self._menu_action("Mostrar u ocultar chat", "Ctrl+Shift+C", lambda: self.chat.setVisible(not self.chat.isVisible())))
         view_menu.addAction(self._menu_action("Mostrar u ocultar explorador", "Ctrl+B", lambda: self.explorer.setVisible(not self.explorer.isVisible())))
@@ -137,6 +146,7 @@ class MainWindow(QMainWindow):
         run_menu.addAction(self._menu_action("Analizar", "F5", self.analyze_program))
         run_menu.addAction(self._menu_action("Ejecutar programa", "F6", self.run_program))
         run_menu.addAction(self._menu_action("Traducir codigo", "F9", self.translate_code))
+        run_menu.addAction(self._menu_action("Generar codigo intermedio", "F10", self.generate_intermediate_code))
 
         terminal_menu = menu_bar.addMenu("Terminal")
         terminal_menu.addAction(self._menu_action("Mostrar consola", "F8", self.show_console))
@@ -149,7 +159,7 @@ class MainWindow(QMainWindow):
         self._shortcut("Ctrl+Shift+P", self.open_palette)
         self.palette = CommandPalette([
             "Nuevo archivo", "Abrir archivo", "Abrir carpeta", "Guardar archivo", "Analizar programa", "Ejecutar programa",
-            "Traducir codigo", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
+            "Traducir codigo", "Generar codigo intermedio", "Mostrar analisis semantico", "Mostrar consola", "Mostrar vista previa", "Mostrar tabla de simbolos", "Explicar errores con IA", "Limpiar resultados",
             "Mostrar u ocultar chat", "Mostrar u ocultar explorador", "Cambiar tamano de fuente",
         ], self)
         self.palette.command_selected.connect(self.execute_palette_command)
@@ -257,6 +267,7 @@ class MainWindow(QMainWindow):
         self.status_errors.setText(f"Errores: {len(self.last_result.errors)}")
         self.status_analyzer.setText("Analizador: correcto" if self.last_result.ok else "Analizador: con errores")
         self.result_output.setPlainText(self._result_text(self.last_result))
+        self.semantic_output.setPlainText(self._semantic_text(self.last_result))
         self.console_output.set_text(self._console_text(self.last_result))
         if not auto_select:
             return
@@ -414,6 +425,43 @@ class MainWindow(QMainWindow):
         self.bottom_tabs.setCurrentWidget(self.result_output)
         self.result_output.setPlainText("Traduccion educativa a Miezee (no ejecutable):\n\n" + self.translator.translate(self.current_text()))
 
+    def show_semantic_analysis(self) -> None:
+        self.analyze_program(auto_select=False)
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.semantic_output)
+
+    def generate_intermediate_code(self) -> None:
+        self.analyze_program(auto_select=False)
+        self.bottom_tabs.setVisible(True)
+        self.bottom_tabs.setCurrentWidget(self.intermediate_output)
+        if self.last_result and self.last_result.errors:
+            self.intermediate_output.setPlainText("No se puede generar codigo intermedio: corrige primero los errores del analisis.")
+            return
+        result = self.intermediate_generator.generate(self.current_text())
+        self.intermediate_output.setPlainText(result["text"])
+
+    def _semantic_text(self, result: PythonAnalysisResult) -> str:
+        previous_errors = [error for error in result.errors if error.code in {"PY-LEXICO", "PY-SINTAXIS"}]
+        semantic_errors = [error for error in result.errors if error.code not in {"PY-LEXICO", "PY-SINTAXIS"}]
+        status = "no ejecutado por errores previos" if previous_errors else "con errores" if semantic_errors else "correcto"
+        lines = [
+            "Analisis semantico de Python",
+            "============================",
+            f"Estado: {status}",
+            "",
+            "Validaciones: ambitos, nombres, simbolos, tipos comunes, importaciones, llamadas y contexto del compilador.",
+        ]
+        if result.semantic_warnings:
+            lines += ["", "Advertencias:"] + [f"- {error.code}: {error.explanation}" for error in result.semantic_warnings]
+        if result.semantic_scopes:
+            lines += ["", "Ambitos:"]
+            for scope in result.semantic_scopes:
+                identifiers = ", ".join(f"{item['name']} ({'/'.join(item['roles'])})" for item in scope["identifiers"])
+                lines.append(f"- {scope['name']} [{scope['type']}]: {identifiers or 'sin identificadores'}")
+        if semantic_errors:
+            lines += ["", "Errores semanticos:"] + [f"- {error.code} linea {error.line}: {error.explanation}" for error in semantic_errors]
+        return "\n".join(lines)
+
     def _result_text(self, result: PythonAnalysisResult) -> str:
         lines = ["Entrada Python:", result.source, "", "Estado final:", "Correcto" if result.ok else "Con errores", "", "Reglas aplicadas:"]
         lines.extend(result.rules_applied or ["Sin reglas aplicadas"])
@@ -454,6 +502,8 @@ class MainWindow(QMainWindow):
         self.last_result = None
         self.console_output.clear()
         self.result_output.clear()
+        self.semantic_output.clear()
+        self.intermediate_output.clear()
         self.problems.set_errors([])
         self.symbols.set_symbols([])
         self.preview.set_python_source("", False)
@@ -487,6 +537,8 @@ class MainWindow(QMainWindow):
             "Analizar programa": self.analyze_program,
             "Ejecutar programa": self.run_program,
             "Traducir codigo": self.translate_code,
+            "Generar codigo intermedio": self.generate_intermediate_code,
+            "Mostrar analisis semantico": self.show_semantic_analysis,
             "Mostrar consola": self.show_console,
             "Mostrar vista previa": self.show_preview,
             "Mostrar tabla de simbolos": lambda: self.bottom_tabs.setCurrentWidget(self.symbols),

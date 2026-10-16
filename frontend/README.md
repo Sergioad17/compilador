@@ -42,6 +42,8 @@ Todos los comandos devuelven JSON.
 - Documentos en pestanas, nuevos documentos y apertura de ejemplos Python.
 - Analisis, diagnosticos en el editor, tabla de simbolos y reglas aplicadas.
 - Traduccion educativa a Miezee.
+- Reporte de analisis semantico con ambitos e identificadores.
+- Generacion y visualizacion de codigo intermedio TAC para Python (`F10`).
 - Bridge Tauri/Python asincrono, sin archivos temporales de codigo.
 
 Se integraron tambien:

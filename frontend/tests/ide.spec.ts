@@ -11,6 +11,13 @@ test.beforeEach(async ({ page }) => {
       { name: "sumar", type: "Funcion", line: 1, kind: "funcion python" },
     ],
     rules: ["PY01", "PY02"],
+    semantic: {
+      ok: true,
+      status: "ok",
+      checks: ["Resolucion de ambitos y nombres"],
+      scopes: [{ name: "top", type: "module", line: 0, identifiers: [{ name: "sumar", roles: ["asignado"] }] }],
+      warnings: [],
+    },
   };
   await page.exposeFunction(
     "nativeInvoke",
@@ -32,6 +39,8 @@ test.beforeEach(async ({ page }) => {
         if (args.operation === "analyze") return clean;
         if (args.operation === "translate")
           return { translation: "FUNCION sumar RETORNA DECIMAL" };
+        if (args.operation === "intermediate")
+          return { ok: true, text: "0001 | (ADD, a, b, t1) | 1", instructions: [{ op: "ADD", arg1: "a", arg2: "b", result: "t1", line: 1 }] };
         if (args.operation === "status")
           return { available: true, text: "Corre localmente" };
         if (args.operation === "chat")
@@ -131,6 +140,15 @@ test("Default uses neutral surfaces and accents", async ({ page }) => {
   await expect(page.locator(".statusbar")).toHaveCSS("background-color", "rgb(37, 37, 37)");
   await expect(page.locator(".tab.active")).toHaveCSS("border-top-color", "rgb(168, 168, 168)");
   await expect(page.locator(".bubble.assistant").first()).toHaveCSS("background-color", "rgb(53, 53, 53)");
+});
+
+test("semantic analysis and intermediate code are visible", async ({ page }) => {
+  await page.locator(".menubar > details").filter({ has: page.locator("summary", { hasText: /^Ver$/ }) }).locator(":scope > summary").hover();
+  await page.getByRole("button", { name: "Mostrar analisis semantico", exact: true }).click();
+  await expect(page.getByText("Estado semantico: Correcto")).toBeVisible();
+  await expect(page.getByText("Resolucion de ambitos y nombres")).toBeVisible();
+  await page.getByRole("button", { name: "Generar codigo intermedio (F10)", exact: true }).click();
+  await expect(page.locator(".intermediate-code")).toContainText("(ADD, a, b, t1)");
 });
 
 test("integrated window buttons invoke native window controls", async ({ page }) => {

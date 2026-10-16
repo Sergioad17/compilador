@@ -4,6 +4,7 @@ from typing import Any
 
 from miezee.core.python_analyzer import PythonAnalyzer, PythonAnalysisResult
 from miezee.core.python_executor import PythonExecutor
+from miezee.core.intermediate_code import PythonIntermediateCodeGenerator
 from miezee.core.python_translator import PythonToMiezeeTranslator
 
 
@@ -30,7 +31,19 @@ def run_python(source: str) -> dict[str, Any]:
     return {"ok": True, "output": output}
 
 
+def generate_intermediate_python(source: str) -> dict[str, Any]:
+    analysis = PythonAnalyzer().analyze(source)
+    blocking = analysis.errors
+    if blocking:
+        error = blocking[0]
+        return {"ok": False, "text": f"No se puede generar codigo intermedio: {error.code} en linea {error.line}: {error.explanation}", "instructions": []}
+    return PythonIntermediateCodeGenerator().generate(source)
+
+
 def _analysis_to_dict(result: PythonAnalysisResult) -> dict[str, Any]:
+    lexical_or_syntax = [error for error in result.errors if error.code in {"PY-LEXICO", "PY-SINTAXIS"}]
+    semantic_errors = [error for error in result.errors if error.code not in {"PY-LEXICO", "PY-SINTAXIS"}]
+    semantic_status = "not_run" if lexical_or_syntax else "error" if semantic_errors else "ok"
     return {
         "ok": result.ok,
         "errors": [
@@ -47,6 +60,21 @@ def _analysis_to_dict(result: PythonAnalysisResult) -> dict[str, Any]:
             for symbol in result.symbol_table.all()
         ],
         "rules": result.rules_applied,
+        "semantic": {
+            "ok": semantic_status == "ok",
+            "status": semantic_status,
+            "checks": [
+                "Resolucion de ambitos y nombres",
+                "Construccion de tabla de simbolos",
+                "Inferencia de tipos comunes",
+                "Validacion de importaciones",
+                "Validacion de llamadas restringidas",
+                "Validacion de contexto por el compilador de Python",
+                "Compatibilidad de llamadas con funciones locales",
+            ],
+            "scopes": result.semantic_scopes,
+            "warnings": [_error_to_dict(error) for error in result.semantic_warnings],
+        },
         "tokens": [
             {
                 "type": token.kind,

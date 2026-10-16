@@ -20,6 +20,23 @@ export interface Analysis {
     endLine: number;
     endColumn: number;
   }[];
+  semantic: {
+    ok: boolean;
+    status: "ok" | "error" | "not_run";
+    checks: string[];
+    scopes: {
+      name: string;
+      type: string;
+      line: number;
+      identifiers: { name: string; roles: string[] }[];
+    }[];
+    warnings: Analysis["errors"];
+  };
+}
+export interface IntermediateCode {
+  ok: boolean;
+  text: string;
+  instructions: { op: string; arg1: string; arg2: string; result: string; line: number }[];
 }
 export interface Document {
   id: string;
@@ -35,6 +52,8 @@ export type Panel =
   | "Consola"
   | "Tabla de simbolos"
   | "Traduccion"
+  | "Semantico"
+  | "Codigo intermedio"
   | "Vista previa";
 export interface ChatMessage {
   role: "user" | "assistant";

@@ -8,7 +8,7 @@ pub async fn python_request(
     source: String,
     request_id: Option<String>,
 ) -> Result<Value, String> {
-    if !["analyze", "translate", "chat", "status", "settings"].contains(&operation.as_str()) {
+    if !["analyze", "translate", "intermediate", "chat", "status", "settings"].contains(&operation.as_str()) {
         return Err("Operacion no disponible".into());
     }
     if operation == "chat" {
