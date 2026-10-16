@@ -14,6 +14,7 @@ CHAT_COMMANDS = [
     "/GenerarPantalla",
     "/GenerarFuncion",
     "/ArreglarPantalla",
+    "/AjustarPantalla",
     "/limpiar",
     "/estado",
 ]
@@ -52,6 +53,8 @@ class ChatCommandHandler:
             return True, "Uso: /GenerarFuncion describe la funcion que quieres crear."
         if text == "/arreglarpantalla":
             return True, "Uso: /ArreglarPantalla corrige el codigo actual del editor con ayuda de IA."
+        if text == "/ajustarpantalla":
+            return True, "Uso: /AjustarPantalla agrega elementos sin eliminar ni modificar el codigo actual."
         if text in {"/explicar", "/corregir"}:
             return True, "Este comando requiere conexion con IA desde el panel de chat."
         return True, "Comando no reconocido. Escribe /ayuda para ver las opciones."

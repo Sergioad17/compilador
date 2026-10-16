@@ -270,6 +270,8 @@ export function useIdeController() {
   async function localChat(command: string): Promise<string | null> {
     const lower = command.toLowerCase();
     if (lower === "/ayuda") return chatCommands.join("\n");
+    if (lower === "/ajustarpantalla")
+      return "Uso: /AjustarPantalla describe unicamente lo que deseas agregar a la pantalla actual.";
     if (lower === "/analizar") {
       await perform("analyze");
       return "Analisis solicitado. Revisa el panel Problemas.";

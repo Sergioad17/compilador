@@ -206,6 +206,7 @@ Comandos disponibles:
 - `/GenerarPantalla`
 - `/GenerarFuncion`
 - `/ArreglarPantalla`
+- `/AjustarPantalla`: agrega elementos a la pantalla actual y rechaza resultados que eliminen, modifiquen o reordenen codigo existente.
 - `/limpiar`
 - `/estado`
 

@@ -14,6 +14,7 @@ export const chatCommands = [
   "/GenerarPantalla",
   "/GenerarFuncion",
   "/ArreglarPantalla",
+  "/AjustarPantalla",
   "/limpiar",
   "/estado",
 ];
@@ -60,7 +61,9 @@ export function useChatController(options: {
           lower,
         )
           ? "chat"
-          : /\/generarpantalla/.test(lower)
+          : /\/ajustarpantalla/.test(lower)
+            ? "ajustar_pantalla"
+            : /\/generarpantalla/.test(lower)
             ? "pantalla"
             : /\/generarfuncion/.test(lower)
               ? "funcion"

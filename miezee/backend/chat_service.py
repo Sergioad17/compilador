@@ -44,6 +44,19 @@ def extract_code(text: str) -> str:
     return ""
 
 
+def preserves_existing_source(source: str, candidate: str) -> bool:
+    """Return True when every meaningful original line remains unchanged and ordered."""
+    original = [line.rstrip() for line in source.splitlines() if line.strip()]
+    generated = [line.rstrip() for line in candidate.splitlines() if line.strip()]
+    if not original:
+        return bool(generated)
+    position = 0
+    for line in generated:
+        if position < len(original) and line == original[position]:
+            position += 1
+    return position == len(original) and len(generated) > len(original)
+
+
 def chat(payload: dict) -> dict:
     message = payload.get("message", "")
     source = payload.get("source", "")
@@ -58,6 +71,11 @@ def chat(payload: dict) -> dict:
     instruction = {
         "funcion": "Crea funciones def, parametros y return. No agregues interfaces ni menus a menos que el usuario los solicite. Conserva las funciones existentes del archivo.",
         "pantalla": "Crea una interfaz real e interactiva con entradas, botones y resultados segun la solicitud, con su bucle de eventos.",
+        "ajustar_pantalla": (
+            "Amplia la pantalla actual solamente con lo solicitado. Es obligatorio conservar literalmente "
+            "todas las lineas existentes, en el mismo orden. Puedes insertar lineas nuevas entre ellas, "
+            "pero no elimines, reemplaces, reordenes ni reformatees codigo existente."
+        ),
         "corregir": "Corrige o modifica el archivo actual segun la solicitud y los errores. Conserva su finalidad y las partes no afectadas.",
     }.get(mode, "Crea un programa completo que resuelva la solicitud.")
     prompt = (
@@ -74,11 +92,32 @@ def chat(payload: dict) -> dict:
     if not code:
         return {"text": response if response.startswith("Error") else "El modelo no envio codigo Python valido. No se modifico el editor.", "code": None}
     analysis = analyze_python(code)
-    if not analysis["ok"]:
-        repaired = client.ask(prompt + f"\nCorrige este intento:\n{code}\nErrores: {analysis['errors']}")
+    additive_violation = mode == "ajustar_pantalla" and not preserves_existing_source(source, code)
+    if not analysis["ok"] or additive_violation:
+        problem = (
+            "El intento modifico, elimino o reordeno lineas existentes. Regenera el archivo agregando "
+            "solo lineas nuevas y conserva literalmente todo el codigo original."
+            if additive_violation
+            else f"Corrige los errores del intento: {analysis['errors']}"
+        )
+        repaired = client.ask(prompt + f"\nIntento rechazado:\n```python\n{code}\n```\n{problem}")
         code = extract_code(repaired)
         if not code or not analyze_python(code)["ok"]:
             return {"text": "El codigo generado no paso el analisis. El editor se conserva; solicita una correccion o revisa la solicitud.", "code": None}
+        if mode == "ajustar_pantalla" and not preserves_existing_source(source, code):
+            return {
+                "text": "El ajuste intentaba modificar o eliminar codigo existente. No se aplicaron cambios al editor.",
+                "code": None,
+            }
+    if mode == "ajustar_pantalla":
+        added = len([line for line in code.splitlines() if line.strip()]) - len(
+            [line for line in source.splitlines() if line.strip()]
+        )
+        unit = "linea" if added == 1 else "lineas"
+        return {
+            "text": f"Pantalla ajustada y validada. Se agregaron {added} {unit}; no se elimino ni modifico codigo existente.",
+            "code": code,
+        }
     changed = list(difflib.unified_diff(source.splitlines(), code.splitlines(), lineterm=""))
     added = sum(line.startswith("+") and not line.startswith("+++") for line in changed)
     removed = sum(line.startswith("-") and not line.startswith("---") for line in changed)
