@@ -27,7 +27,7 @@ class ContextChatClient(AIClient):
 
     def _post_ollama(self, path: str, payload: dict) -> dict:
         payload["options"]["num_ctx"] = 32768
-        payload["options"]["num_predict"] = 1200
+        payload["options"]["num_predict"] = 4096
         return super()._post_ollama(path, payload)
 
 
